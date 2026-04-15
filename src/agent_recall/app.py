@@ -9,25 +9,17 @@ from .config import (
     get_claude_jsonl_path,
     get_codex_jsonl_path,
     get_jsonl_paths,
-    use_simulated_source,
 )
 from .services.adapters import JsonlTokenSource, JsonlTokenSourceConfig
-from .services.monitor_service import CompositeTokenSource, MonitorService, SimulatedTokenSource
+from .services.monitor_service import MonitorService
 from .utils.logging import configure_logging
 
 
 def build_monitor_service() -> MonitorService:
-    sources = []
-
     jsonl_paths = _build_jsonl_source()
-    if jsonl_paths is not None:
-        sources.append(jsonl_paths)
-
-    if use_simulated_source():
-        sources.append(SimulatedTokenSource())
-
-    token_source = sources[0] if len(sources) == 1 else CompositeTokenSource(tuple(sources))
-    return MonitorService(token_source=token_source)
+    if jsonl_paths is None:
+        return MonitorService()
+    return MonitorService(token_source=jsonl_paths)
 
 
 def _build_jsonl_source() -> JsonlTokenSource | None:

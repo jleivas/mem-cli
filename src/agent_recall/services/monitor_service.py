@@ -18,6 +18,12 @@ class TokenSource(Protocol):
 
 
 @dataclass(slots=True)
+class NullTokenSource:
+    def poll(self) -> Iterable[TokenEvent]:
+        return ()
+
+
+@dataclass(slots=True)
 class SimulatedTokenSource:
     agents: tuple[str, ...] = ("codex", "claude", "local-agent")
     seed: int | None = None
@@ -57,7 +63,7 @@ class MonitorService:
         interval_seconds: float = 1.0,
     ) -> None:
         self.tracker = tracker or TokenTracker()
-        self.token_source = token_source or SimulatedTokenSource()
+        self.token_source = token_source or NullTokenSource()
         self.interval_seconds = interval_seconds
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -90,4 +96,10 @@ class MonitorService:
             time.sleep(self.interval_seconds)
 
 
-__all__ = ["CompositeTokenSource", "MonitorService", "SimulatedTokenSource", "TokenSource"]
+__all__ = [
+    "CompositeTokenSource",
+    "MonitorService",
+    "NullTokenSource",
+    "SimulatedTokenSource",
+    "TokenSource",
+]

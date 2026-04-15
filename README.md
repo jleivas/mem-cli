@@ -23,7 +23,7 @@ What this MVP does:
 - starts a local monitor process
 - stops the monitor process
 - reports current runtime status
-- shows a live terminal dashboard with simulated token usage
+- shows a live terminal dashboard with real token usage from local JSONL events
 - keeps the codebase modular for future growth
 
 What it does not do yet:
@@ -38,14 +38,13 @@ What it does not do yet:
 
 ## Local JSONL Adapters
 
-`agent-recall` can read token events from local JSONL files before real adapters exist.
+`agent-recall` reads token events from local JSONL files written by the CLIs you already use.
 
 Use these environment variables:
 
 - `AGENT_RECALL_CODEX_JSONL` for a JSONL file that represents Codex token events
 - `AGENT_RECALL_CLAUDE_JSONL` for a JSONL file that represents Claude token events
 - `AGENT_RECALL_JSONL_PATHS` for extra comma-separated JSONL paths
-- `AGENT_RECALL_USE_SIMULATED` to keep simulated events on by default
 
 The adapter expects one JSON object per line. Example:
 
@@ -59,33 +58,33 @@ If `agent_name` is omitted, the configured agent label is used.
 Example configuration:
 
 ```bash
+mkdir -p "$HOME/.agent-recall"
 export AGENT_RECALL_CODEX_JSONL="$HOME/.agent-recall/codex.jsonl"
 export AGENT_RECALL_CLAUDE_JSONL="$HOME/.agent-recall/claude.jsonl"
-export AGENT_RECALL_USE_SIMULATED=0
 agent-recall dashboard --view both
 ```
 
-If you want the demo to stay alive even when those files are empty, leave simulated events enabled or omit the JSONL paths.
+If the files are empty or not configured, the dashboard will stay idle instead of fabricating token data.
 
 ### Capture from Codex CLI
 
-Codex CLI supports newline-delimited JSON with `--json`, which is the right format for `agent-recall` to tail locally:
+Codex CLI supports newline-delimited JSON with `codex exec --json`. The simplest workflow is to tee that JSON into the file watched by `agent-recall`:
 
 ```bash
-codex --json "review this project" | tee -a "$HOME/.agent-recall/codex.jsonl"
+codex exec --json "review this project" | tee -a "$HOME/.agent-recall/codex.jsonl"
 ```
 
-If the emitted JSON event includes token usage metadata, `agent-recall` will pick it up automatically.
+The JSONL reader extracts token counts from top-level fields or nested `usage` objects.
 
 ### Capture from Claude CLI
 
-Claude Code supports structured JSON output for print mode:
+Claude Code supports structured JSON output for print mode with `-p` and `--output-format json`:
 
 ```bash
-claude -p "review this project" --bare --output-format json | tee "$HOME/.agent-recall/claude.jsonl"
+claude -p "review this project" --output-format json | tee -a "$HOME/.agent-recall/claude.jsonl"
 ```
 
-Anthropic documents that the JSON output includes metadata such as usage. `agent-recall` will read that metadata when present.
+Anthropic documents that the JSON output includes metadata such as usage. `agent-recall` reads those token fields when present.
 
 ## Installation
 

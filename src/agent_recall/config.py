@@ -9,7 +9,6 @@ HOME_ENV_VAR = "AGENT_RECALL_HOME"
 CODEX_JSONL_ENV_VAR = "AGENT_RECALL_CODEX_JSONL"
 CLAUDE_JSONL_ENV_VAR = "AGENT_RECALL_CLAUDE_JSONL"
 JSONL_PATHS_ENV_VAR = "AGENT_RECALL_JSONL_PATHS"
-USE_SIMULATED_ENV_VAR = "AGENT_RECALL_USE_SIMULATED"
 
 
 def get_app_home() -> Path:
@@ -39,8 +38,3 @@ def get_claude_jsonl_path() -> Path | None:
 
 def get_jsonl_paths() -> str | None:
     return os.environ.get(JSONL_PATHS_ENV_VAR)
-
-
-def use_simulated_source() -> bool:
-    value = os.environ.get(USE_SIMULATED_ENV_VAR, "1").strip().lower()
-    return value not in {"0", "false", "no", "off"}
