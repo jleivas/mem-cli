@@ -15,17 +15,24 @@ set -euo pipefail
 JSONL_FILE="${MEM_CLAUDE_JSONL:-$HOME/.mem-cli/claude.jsonl}"
 mkdir -p "$(dirname "$JSONL_FILE")"
 
-python3 - "$JSONL_FILE" <<'PYEOF'
-import sys, json, datetime, os
+payload="$(cat)"
+
+PAYLOAD="$payload" python3 - "$JSONL_FILE" <<'PYEOF'
+import datetime
+import json
+import os
+import sys
 
 jsonl_file = sys.argv[1]
+raw_payload = os.environ.get("PAYLOAD", "")
+
 try:
-    payload = json.load(sys.stdin)
+    payload = json.loads(raw_payload)
 except (json.JSONDecodeError, ValueError):
     sys.exit(0)
 
 # Usage may sit at the top level or nested inside a "usage" key.
-usage = payload if "input_tokens" in payload else payload.get("usage") or {}
+usage = payload if isinstance(payload, dict) and "input_tokens" in payload else (payload.get("usage") if isinstance(payload, dict) else {}) or {}
 input_tokens = int(usage.get("input_tokens") or 0)
 output_tokens = int(usage.get("output_tokens") or 0)
 cache_creation = int(usage.get("cache_creation_input_tokens") or 0)
@@ -45,6 +52,6 @@ if cache_creation or cache_read:
     event["cache_creation_input_tokens"] = cache_creation
     event["cache_read_input_tokens"] = cache_read
 
-with open(jsonl_file, "a") as fh:
+with open(jsonl_file, "a", encoding="utf-8") as fh:
     fh.write(json.dumps(event) + "\n")
 PYEOF

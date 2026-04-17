@@ -9,6 +9,7 @@ from typing import Callable, Iterable, Literal
 from rich.align import Align
 from rich.box import ROUNDED
 from rich.console import Console, Group
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -183,6 +184,14 @@ def _build_footer_panel(message: str, mode_label: str) -> Panel:
     )
 
 
+def _build_live_footer_panel(message: str) -> Panel:
+    return Panel(
+        Align.center(Text(message, style=f"bold {ACCENT_YELLOW}")),
+        border_style=ACCENT_ORANGE,
+        padding=(0, 1),
+    )
+
+
 def _normalize_choice(raw: str) -> str:
     value = raw.strip().lower()
     aliases = {
@@ -286,9 +295,10 @@ def render_dashboard(
     view: DashboardViewMode = "both",
     mode_label: str = "live",
     footer_message: str = "Choose an action below.",
+    show_actions: bool = True,
 ) -> Group:
     body = _render_body(snapshot, running, view)
-    footer = _build_footer_panel(footer_message, mode_label)
+    footer = _build_footer_panel(footer_message, mode_label) if show_actions else _build_live_footer_panel(footer_message)
     return Group(body, footer)
 
 
@@ -327,14 +337,52 @@ def live_dashboard(
     store = history_store or DashboardSnapshotStore()
     pinned_snapshot: list[AgentStatus] | None = None
     pinned_history_path: Path | None = None
-    mode: Literal["live", "history_list", "history_record"] = "live"
+    footer_message = "Press Ctrl+C to pause real-time updates."
+    active_snapshot = _collect_rows(snapshot_provider())
+    renderable = render_dashboard(
+        active_snapshot,
+        running_provider(),
+        view=view,
+        mode_label="live",
+        footer_message=footer_message,
+        show_actions=False,
+    )
+
+    try:
+        with Live(renderable, console=console, refresh_per_second=refresh_per_second, screen=True, auto_refresh=False) as live:
+            while True:
+                active_snapshot = _collect_rows(snapshot_provider())
+                renderable = render_dashboard(
+                    active_snapshot,
+                    running_provider(),
+                    view=view,
+                    mode_label="live",
+                    footer_message="Press Ctrl+C to pause real-time updates.",
+                    show_actions=False,
+                )
+                live.update(renderable)
+                live.refresh()
+                time.sleep(max(0.1, 1.0 / refresh_per_second))
+    except KeyboardInterrupt:
+        pass
+
     footer_message = "Choose an action below."
+    mode: Literal["live", "history_list", "history_record"] = "live"
 
     while True:
         console.clear()
         if mode == "live":
             active_snapshot = _collect_rows(snapshot_provider())
-            console.print(render_dashboard(active_snapshot, running_provider(), view=view, mode_label="live", footer_message=footer_message))
+            console.print(
+                render_dashboard(
+                    active_snapshot,
+                    running_provider(),
+                    view=view,
+                    mode_label="paused",
+                    footer_message=footer_message,
+                    show_actions=True,
+                )
+            )
             choice = _prompt_for_choice(console, {"1", "2", "3", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
 
             if choice == "1":
@@ -351,7 +399,8 @@ def live_dashboard(
             elif choice == "0":
                 return
         elif mode == "history_list":
-            console.print(Group(_build_history_panel(store.list()), _build_history_footer_panel()))
+            entries = store.list()
+            console.print(Group(_build_history_panel(entries), _build_history_footer_panel()))
             selected_entry = _choose_history_entry(console, store)
             if selected_entry is None:
                 mode = "live"
