@@ -32,14 +32,14 @@ ACCENT_ORANGE = "#F98C2B"
 ACCENT_YELLOW = "#F7B500"
 
 DASHBOARD_ACTIONS = (
-    ("1", "Save snapshot", "Save the currently visible dashboard to ~/.mem-cli/history."),
+    ("1", "Save snapshot", "Save the currently visible dashboard to local history."),
     ("2", "Open history", "Browse saved snapshots and load one back into the dashboard."),
     ("3", "Reset live data", "Clear the tracker and truncate the watched JSONL files."),
     ("0", "Back to main menu", "Return to the main CLI menu."),
 )
 
 HISTORY_RECORD_ACTIONS = (
-    ("1", "Delete record", "Remove this snapshot from ~/.mem-cli/history."),
+    ("1", "Delete record", "Remove this snapshot from local history."),
     ("0", "Back to history", "Return to the snapshot list."),
 )
 
