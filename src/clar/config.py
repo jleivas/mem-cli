@@ -22,6 +22,12 @@ def get_app_home() -> Path:
     return Path.home() / ".mem-cli"
 
 
+def ensure_app_home() -> Path:
+    app_home = get_app_home()
+    app_home.mkdir(parents=True, exist_ok=True)
+    return app_home
+
+
 def get_runtime_dir() -> Path:
     return get_app_home() / "runtime"
 
@@ -42,3 +48,11 @@ def get_claude_jsonl_path() -> Path | None:
 
 def get_jsonl_paths() -> str | None:
     return os.environ.get(JSONL_PATHS_ENV_VAR) or os.environ.get(LEGACY_JSONL_PATHS_ENV_VAR)
+
+
+def get_default_codex_jsonl_path() -> Path:
+    return ensure_app_home() / "codex.jsonl"
+
+
+def get_default_claude_jsonl_path() -> Path:
+    return ensure_app_home() / "claude.jsonl"

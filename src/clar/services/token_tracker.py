@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from threading import Lock
 
 from ..models import AgentStatus, TokenEvent
+from ..utils.time import utc_now
 
 
 @dataclass(slots=True)
@@ -20,6 +21,7 @@ class TokenTracker:
     def __init__(self) -> None:
         self._lock = Lock()
         self._agents: dict[str, _AgentTotals] = {}
+        self._started_at = utc_now()
 
     def register_event(self, event: TokenEvent) -> None:
         with self._lock:
@@ -32,12 +34,15 @@ class TokenTracker:
 
     def snapshot(self) -> list[AgentStatus]:
         with self._lock:
+            now = utc_now()
+            elapsed_minutes = max((now - self._started_at).total_seconds() / 60, 1 / 60)
             items = [
                 AgentStatus(
                     agent_name=name,
                     input_tokens=totals.input_tokens,
                     output_tokens=totals.output_tokens,
                     total_tokens=totals.total_tokens,
+                    average_tokens_per_minute=totals.total_tokens / elapsed_minutes,
                     last_updated=totals.last_updated,
                     state=totals.state,
                     source=totals.source,
@@ -45,4 +50,3 @@ class TokenTracker:
                 for name, totals in self._agents.items()
             ]
         return sorted(items, key=lambda item: item.agent_name)
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import cast
 
 import typer
@@ -15,6 +16,8 @@ from rich.table import Table
 from rich.text import Text
 
 from . import APP_VERSION
+from .config import get_default_claude_jsonl_path
+from .config import get_default_codex_jsonl_path
 from .config import get_runtime_state_path
 from .app import build_monitor_service
 from .services.process_registry import ProcessRegistry
@@ -42,6 +45,16 @@ class _ActionResult:
     title: str
     body: Panel | Table
     border_style: str
+
+
+def _bootstrap_env() -> None:
+    os.environ.setdefault("MEM_CLAUDE_JSONL", str(get_default_claude_jsonl_path()))
+    os.environ.setdefault("MEM_CODEX_JSONL", str(get_default_codex_jsonl_path()))
+
+
+@app.callback(invoke_without_command=True)
+def _bootstrap() -> None:
+    _bootstrap_env()
 
 
 def _registry() -> ProcessRegistry:
@@ -299,6 +312,7 @@ def _run_menu() -> None:
                 live.refresh()
                 _pause_for_continue()
             elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
+                console.clear()
                 return
             else:
                 live.update(_render_action_layout(_ActionResult(
@@ -378,6 +392,7 @@ def version() -> None:
 
 def main() -> None:
     import sys
+    _bootstrap_env()
     if len(sys.argv) == 1:
         _run_menu()
     else:

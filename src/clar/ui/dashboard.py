@@ -56,13 +56,14 @@ def build_detail_table(snapshot: Iterable[AgentStatus]) -> Table:
     table.add_column("Input", justify="right", style="#F98C2B")
     table.add_column("Output", justify="right", style="#F98C2B")
     table.add_column("Total", justify="right", style="#F7B500")
+    table.add_column("Avg/min", justify="right", style="#F7B500")
     table.add_column("Last Update", no_wrap=True)
     table.add_column("Source", no_wrap=True)
     table.add_column("State", no_wrap=True)
 
     rows = _collect_rows(snapshot)
     if not rows:
-        table.add_row("-", "0", "0", "0", "-", "-", "waiting")
+        table.add_row("-", "0", "0", "0", "0.0", "-", "-", "waiting")
         return table
 
     for item in rows:
@@ -71,6 +72,7 @@ def build_detail_table(snapshot: Iterable[AgentStatus]) -> Table:
             str(item.input_tokens),
             str(item.output_tokens),
             str(item.total_tokens),
+            f"{item.average_tokens_per_minute:.1f}",
             item.last_updated or "-",
             item.source,
             item.state,

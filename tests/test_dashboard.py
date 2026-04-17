@@ -18,6 +18,7 @@ def test_build_summary_panel_contains_overview() -> None:
 def test_build_detail_table_contains_source_column() -> None:
     table = build_detail_table(_snapshot())
     assert any(column.header == "Source" for column in table.columns)
+    assert any(column.header == "Avg/min" for column in table.columns)
 
 
 def test_render_dashboard_supports_both_view() -> None:

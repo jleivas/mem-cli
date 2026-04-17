@@ -44,12 +44,7 @@ The fastest path to seeing real data in the dashboard:
 # 1. Install
 pip install -e .
 
-# 2. Point mem at your capture files
-export MEM_CLAUDE_JSONL="$HOME/.mem-cli/claude.jsonl"
-export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
-mkdir -p "$HOME/.mem-cli"
-
-# 3. Start the dashboard
+# 2. Start the dashboard
 mem dashboard
 
 # In another terminal — send a Claude Code command and capture it
