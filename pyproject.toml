@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mem-cli"
 version = "0.1.0"
-description = "Mem CLI for AI agents — local token observability and memory."
+description = "Mem CLI for AI agents — Local token observability & agent memory"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

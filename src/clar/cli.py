@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import cast
 
 import typer
-from rich.console import Console
+from rich.console import Console, Group
+from rich.align import Align
+from rich.box import ROUNDED
 from rich.panel import Panel
-from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
@@ -20,26 +21,80 @@ from .ui.dashboard import DashboardViewMode
 app = typer.Typer(add_completion=False, help="Mem CLI for AI agents — local token observability and memory.")
 console = Console()
 CLI_NAME = "mem"
+ACCENT_PINK = "#E93A7D"
+ACCENT_ORANGE = "#F98C2B"
+ACCENT_YELLOW = "#F7B500"
+MENU_ITEMS = (
+    ("1", "Start monitor", "Launch the background watcher."),
+    ("2", "Stop monitor", "Shut down the watcher cleanly."),
+    ("3", "Dashboard", "Open the live usage screen."),
+    ("4", "Status", "Inspect the runtime state."),
+    ("0", "Quit", "Close the interactive menu."),
+)
 
 
 def _registry() -> ProcessRegistry:
     return ProcessRegistry(RuntimeStateStore(get_runtime_state_path()))
 
 
+def _brand_wave() -> Text:
+    wave = Text()
+    wave.append("╭────╮    ", style=ACCENT_PINK)
+    wave.append("╭──╮", style=ACCENT_ORANGE)
+    wave.append("    ╭──╮        ", style=ACCENT_YELLOW)
+    wave.append("╭──", style=ACCENT_YELLOW)
+    return wave
+
+
+def _build_menu_panel() -> Panel:
+    header = Text()
+    header.append("mem", style=f"bold {ACCENT_PINK}")
+    header.append("  ")
+    header.append("CLI", style=f"bold {ACCENT_YELLOW}")
+
+    subtitle = Text("Local token observability & agent memory", style="dim white")
+    wave = Align.center(_brand_wave())
+
+    return Panel(
+        Align.center(
+            Group(
+                Align.center(header),
+                Align.center(subtitle),
+                wave,
+            )
+        ),
+        box=ROUNDED,
+        border_style=ACCENT_PINK,
+        padding=(1, 2),
+    )
+
+
+def _build_menu_options() -> Table:
+    table = Table.grid(expand=True, padding=(0, 1))
+    table.add_column(no_wrap=True)
+    table.add_column(ratio=1)
+    table.add_column(justify="right", ratio=2)
+
+    for key, title, description in MENU_ITEMS:
+        key_style = f"bold {ACCENT_YELLOW}" if key == "0" else f"bold {ACCENT_ORANGE}"
+        title_style = f"bold {ACCENT_PINK}" if key in {"1", "3"} else "white"
+        table.add_row(
+            Text(key, style=key_style),
+            Text(title, style=title_style),
+            Text(description, style="dim"),
+        )
+    return table
+
+
 def _print_menu() -> None:
+    console.clear()
+    console.print(Panel.fit(f"[bold {ACCENT_PINK}]{CLI_NAME}[/bold {ACCENT_PINK}]  [dim]v{APP_VERSION}[/dim]", border_style=ACCENT_ORANGE))
     console.print()
-    console.print(Rule(f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]  [dim]v{APP_VERSION}[/dim]"))
+    console.print(_build_menu_panel())
     console.print()
-    menu = Table.grid(padding=(0, 2))
-    menu.add_column(style="bold #F98C2B", justify="right")
-    menu.add_column(style="white")
-    menu.add_row("1", "Start monitor")
-    menu.add_row("2", "Stop monitor")
-    menu.add_row("3", "Dashboard")
-    menu.add_row("4", "Status")
-    menu.add_row("0", "Quit")
-    console.print(menu)
+    console.print(Panel(_build_menu_options(), box=ROUNDED, border_style=ACCENT_ORANGE, title="Actions"))
     console.print()
+    console.print(Panel.fit("[dim]Enter a number to continue.[/dim]", border_style=ACCENT_YELLOW))
 
 
 def _run_menu() -> None:
