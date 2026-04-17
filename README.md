@@ -38,7 +38,7 @@ What it does not do yet:
 
 ## Local JSONL Adapters
 
-`agent-recall` reads token events from local JSONL files written by the CLIs you already use.
+`agent-recall` reads token events from local JSON or JSONL files written by the CLIs you already use.
 
 Use these environment variables:
 
@@ -46,7 +46,7 @@ Use these environment variables:
 - `AGENT_RECALL_CLAUDE_JSONL` for a JSONL file that represents Claude token events
 - `AGENT_RECALL_JSONL_PATHS` for extra comma-separated JSONL paths
 
-The adapter expects one JSON object per line. Example:
+The adapter accepts one JSON object per line, a pretty-printed JSON document, or a JSON array of events. Example:
 
 ```jsonl
 {"agent_name":"codex","input_tokens":18,"output_tokens":42,"timestamp":"2026-04-15T15:10:00+00:00","source":"codex-local"}
@@ -84,7 +84,7 @@ Claude Code supports structured JSON output for print mode with `-p` and `--outp
 claude -p "review this project" --output-format json | tee -a "$HOME/.agent-recall/claude.jsonl"
 ```
 
-Anthropic documents that the JSON output includes metadata such as usage. `agent-recall` reads those token fields when present.
+If you want a line-oriented stream, `--output-format stream-json` is usually a better fit. `agent-recall` reads token fields from `usage`, `last_token_usage`, and similar nested blocks when present.
 
 ## Installation
 

@@ -43,33 +43,55 @@ class JsonlTokenSource:
         if stat_result.st_size < cursor.size:
             cursor.position = 0
 
-        events: list[TokenEvent] = []
-        with path.open("r", encoding="utf-8") as handle:
+        with path.open("rb") as handle:
             handle.seek(cursor.position)
-            while line := handle.readline():
-                cursor.position = handle.tell()
-                cursor.size = max(cursor.size, cursor.position)
-                raw = line.strip()
-                if not raw:
-                    continue
-                event = self._parse_event(raw, configured_agent, path)
-                if event is not None:
-                    events.append(event)
+            raw_bytes = handle.read()
+
+        if not raw_bytes:
+            cursor.size = stat_result.st_size
+            return ()
+
+        raw_text = raw_bytes.decode("utf-8", errors="ignore")
+        events, consumed_chars = self._parse_buffer(raw_text, configured_agent, path)
+        cursor.position += len(raw_text[:consumed_chars].encode("utf-8"))
         cursor.size = stat_result.st_size
         return events
 
-    def _parse_event(self, raw: str, configured_agent: str, path: Path) -> TokenEvent | None:
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            logger.warning("Skipping invalid JSONL line in %s", path)
-            return None
+    def _parse_buffer(self, raw_text: str, configured_agent: str, path: Path) -> tuple[list[TokenEvent], int]:
+        decoder = json.JSONDecoder()
+        index = self._skip_whitespace(raw_text, 0)
+        events: list[TokenEvent] = []
+
+        while index < len(raw_text):
+            try:
+                payload, next_index = decoder.raw_decode(raw_text, index)
+            except json.JSONDecodeError:
+                if index == 0:
+                    logger.warning("Skipping invalid JSON/JSONL content in %s", path)
+                break
+
+            events.extend(self._events_from_payload(payload, configured_agent, path))
+            index = self._skip_whitespace(raw_text, next_index)
+
+        return events, index
+
+    @staticmethod
+    def _skip_whitespace(raw_text: str, index: int) -> int:
+        while index < len(raw_text) and raw_text[index].isspace():
+            index += 1
+        return index
+
+    def _events_from_payload(self, payload: Any, configured_agent: str, path: Path) -> list[TokenEvent]:
+        if isinstance(payload, list):
+            events: list[TokenEvent] = []
+            for item in payload:
+                events.extend(self._events_from_payload(item, configured_agent, path))
+            return events
 
         if not isinstance(payload, dict):
-            logger.warning("Skipping non-object JSONL line in %s", path)
-            return None
+            return []
 
-        return self._event_from_payload(payload, configured_agent, path)
+        return [self._event_from_payload(payload, configured_agent, path)]
 
     def _event_from_payload(self, payload: dict[str, Any], configured_agent: str, path: Path) -> TokenEvent:
         agent_name = str(payload.get("agent_name") or configured_agent)
@@ -94,13 +116,6 @@ class JsonlTokenSource:
         return int(value)
 
     def _extract_token_counts(self, payload: dict[str, Any]) -> tuple[int, int, int | None]:
-        direct_input = self._coerce_int(payload.get("input_tokens"))
-        direct_output = self._coerce_int(payload.get("output_tokens"))
-        direct_total = payload.get("total_tokens")
-
-        if direct_input or direct_output or direct_total is not None:
-            return direct_input, direct_output, self._coerce_int(direct_total) if direct_total is not None else None
-
         nested_counts = self._search_token_counts(payload)
         if nested_counts is not None:
             return nested_counts
@@ -109,6 +124,13 @@ class JsonlTokenSource:
 
     def _search_token_counts(self, value: Any) -> tuple[int, int, int | None] | None:
         if isinstance(value, dict):
+            for key in ("usage", "last_token_usage", "token_usage", "total_token_usage"):
+                nested_value = value.get(key)
+                if nested_value is not None:
+                    found = self._search_token_counts(nested_value)
+                    if found is not None:
+                        return found
+
             input_tokens = self._coerce_int(value.get("input_tokens"))
             output_tokens = self._coerce_int(value.get("output_tokens"))
             total_tokens = value.get("total_tokens")

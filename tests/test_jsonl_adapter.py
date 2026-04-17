@@ -67,3 +67,62 @@ def test_jsonl_source_extracts_nested_usage_fields(tmp_path) -> None:
     assert events[1].agent_name == "codex"
     assert events[1].input_tokens == 4
     assert events[1].output_tokens == 6
+
+
+def test_jsonl_source_reads_pretty_printed_json_documents(tmp_path) -> None:
+    path = tmp_path / "claude.json"
+    path.write_text(
+        """[
+  {
+    "result": "done",
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 27,
+      "total_tokens": 45
+    },
+    "session_id": "abc"
+  }
+]
+""",
+        encoding="utf-8",
+    )
+
+    source = JsonlTokenSource(JsonlTokenSourceConfig(paths_by_agent={"claude": path}))
+    events = list(source.poll())
+
+    assert len(events) == 1
+    assert events[0].agent_name == "claude"
+    assert events[0].input_tokens == 18
+    assert events[0].output_tokens == 27
+    assert events[0].total_tokens == 45
+
+
+def test_jsonl_source_prefers_last_token_usage_for_codex(tmp_path) -> None:
+    path = tmp_path / "codex.json"
+    path.write_text(
+        """{
+  "type": "event_msg",
+  "payload": {
+    "type": "token_count",
+    "info": {
+      "total_token_usage": {
+        "input_tokens": 100,
+        "output_tokens": 20
+      },
+      "last_token_usage": {
+        "input_tokens": 7,
+        "output_tokens": 3
+      }
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    source = JsonlTokenSource(JsonlTokenSourceConfig(paths_by_agent={"codex": path}))
+    events = list(source.poll())
+
+    assert len(events) == 1
+    assert events[0].input_tokens == 7
+    assert events[0].output_tokens == 3
