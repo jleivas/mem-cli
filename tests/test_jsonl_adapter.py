@@ -158,3 +158,24 @@ def test_jsonl_source_prefers_last_token_usage_for_codex(tmp_path) -> None:
     assert len(events) == 1
     assert events[0].input_tokens == 7
     assert events[0].output_tokens == 3
+
+
+def test_jsonl_source_skips_records_without_token_counts(tmp_path) -> None:
+    path = tmp_path / "claude.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                '{"event":"heartbeat","message":"still running"}',
+                '{"usage":{"input_tokens":8,"output_tokens":12}}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    source = JsonlTokenSource(JsonlTokenSourceConfig(paths_by_agent={"claude": path}))
+    events = list(source.poll())
+
+    assert len(events) == 1
+    assert events[0].input_tokens == 8
+    assert events[0].output_tokens == 12

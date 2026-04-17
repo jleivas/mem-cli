@@ -15,7 +15,7 @@ def test_register_event_and_snapshot() -> None:
     assert item.input_tokens == 15
     assert item.output_tokens == 27
     assert item.total_tokens == 42
-    assert item.average_tokens_per_minute > 0
+    assert item.average_tokens_per_minute == 21.0
     assert item.source == "test"
 
 

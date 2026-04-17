@@ -91,11 +91,14 @@ class JsonlTokenSource:
         if not isinstance(payload, dict):
             return []
 
-        return [self._event_from_payload(payload, configured_agent, path)]
+        event = self._event_from_payload(payload, configured_agent, path)
+        return [event] if event is not None else []
 
-    def _event_from_payload(self, payload: dict[str, Any], configured_agent: str, path: Path) -> TokenEvent:
+    def _event_from_payload(self, payload: dict[str, Any], configured_agent: str, path: Path) -> TokenEvent | None:
         agent_name = str(payload.get("agent_name") or configured_agent)
         input_tokens, output_tokens, total_tokens = self._extract_token_counts(payload)
+        if total_tokens is None and input_tokens == 0 and output_tokens == 0:
+            return None
         if total_tokens is not None and input_tokens == 0 and output_tokens == 0:
             output_tokens = total_tokens
 

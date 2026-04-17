@@ -94,7 +94,7 @@ def build_detail_table(snapshot: Iterable[AgentStatus]) -> Table:
     table.add_column("Input", justify="right", style=ACCENT_ORANGE)
     table.add_column("Output", justify="right", style=ACCENT_ORANGE)
     table.add_column("Total", justify="right", style=ACCENT_YELLOW)
-    table.add_column("Avg/min", justify="right", style=ACCENT_YELLOW)
+    table.add_column("Avg/record", justify="right", style=ACCENT_YELLOW)
     table.add_column("Last Update", no_wrap=True)
     table.add_column("Source", no_wrap=True)
     table.add_column("State", no_wrap=True)
