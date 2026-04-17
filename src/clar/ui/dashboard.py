@@ -49,9 +49,17 @@ def _collect_rows(snapshot: Iterable[AgentStatus]) -> list[AgentStatus]:
     return list(snapshot)
 
 
-def _format_timestamp(value: datetime | None) -> str:
-    if value is None:
+def _format_timestamp(value: datetime | str | None) -> str:
+    if value is None or value == "":
         return "-"
+    if isinstance(value, str):
+        normalized = value.replace("Z", "+00:00")
+        try:
+            value = datetime.fromisoformat(normalized)
+        except ValueError:
+            return value
+    if value.tzinfo is None:
+        return value.strftime("%Y-%m-%d %H:%M:%S")
     return value.astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -73,7 +81,7 @@ def build_summary_panel(snapshot: Iterable[AgentStatus], running: bool) -> Panel
     summary.add_row("Output tokens", str(total_output))
     summary.add_row("Total tokens", str(total_tokens))
     summary.add_row("Top agent", top_agent)
-    summary.add_row("Last update", last_update)
+    summary.add_row("Last update", _format_timestamp(last_update))
 
     title = Text("Overview", style=f"bold {ACCENT_YELLOW}")
     return Panel(summary, title=title, border_style=ACCENT_PINK if running else ACCENT_ORANGE)
@@ -102,7 +110,7 @@ def build_detail_table(snapshot: Iterable[AgentStatus]) -> Table:
             str(item.output_tokens),
             str(item.total_tokens),
             f"{item.average_tokens_per_minute:.1f}",
-            item.last_updated or "-",
+            _format_timestamp(item.last_updated),
             item.source,
             item.state,
         )
