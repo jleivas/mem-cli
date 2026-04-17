@@ -36,6 +36,30 @@ What it does not do yet:
 - a full MCP server
 - cloud services
 
+## Quick Start with Real Token Data
+
+The fastest path to seeing real data in the dashboard:
+
+```bash
+# 1. Install
+pip install -e .
+
+# 2. Point agent-recall at your capture files
+export AGENT_RECALL_CLAUDE_JSONL="$HOME/.agent-recall/claude.jsonl"
+export AGENT_RECALL_CODEX_JSONL="$HOME/.agent-recall/codex.jsonl"
+mkdir -p "$HOME/.agent-recall"
+
+# 3. Start the dashboard
+agent-recall dashboard
+
+# In another terminal — send a Claude Code command and capture it
+claude -p "hello" --verbose --output-format stream-json | tee -a "$HOME/.agent-recall/claude.jsonl"
+```
+
+The dashboard polls both files every second. Token counts appear within two seconds of each captured event.
+
+---
+
 ## Local JSONL Adapters
 
 `agent-recall` reads token events from local JSON or JSONL files written by the CLIs you already use.
@@ -66,9 +90,9 @@ agent-recall dashboard --view both
 
 If the files are empty or not configured, the dashboard will stay idle instead of fabricating token data.
 
-### Capture from Codex CLI
+### Capture from Codex CLI — manual one-shot
 
-Codex CLI supports newline-delimited JSON with `codex exec --json`. The simplest workflow is to tee that JSON into the file watched by `agent-recall`:
+The non-interactive subcommand is `codex exec`. Use `--json` to emit JSONL and tee it into the watched file:
 
 ```bash
 codex exec --json "review this project" | tee -a "$HOME/.agent-recall/codex.jsonl"
@@ -76,7 +100,43 @@ codex exec --json "review this project" | tee -a "$HOME/.agent-recall/codex.json
 
 The JSONL reader extracts token counts from top-level fields or nested `usage` objects.
 
-### Capture from Claude CLI
+### Capture from Codex CLI — automatic wrapper (recommended)
+
+Codex CLI does not have a native hook system, so the recommended approach is a shell function wrapper that transparently tees JSONL output on every `codex exec` run.
+
+#### 1. Set the environment variable
+
+Add to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export AGENT_RECALL_CODEX_JSONL="$HOME/.agent-recall/codex.jsonl"
+```
+
+#### 2. Add the wrapper function
+
+In the same file, define a function that wraps `codex exec`:
+
+```bash
+codex-track() {
+  mkdir -p "$(dirname "${AGENT_RECALL_CODEX_JSONL:-$HOME/.agent-recall/codex.jsonl}")"
+  command codex exec --json "$@" \
+    | tee -a "${AGENT_RECALL_CODEX_JSONL:-$HOME/.agent-recall/codex.jsonl}"
+}
+```
+
+Reload your shell (`source ~/.zshrc`). Use `codex-track` instead of `codex exec` for runs you want monitored. Your normal `codex` invocations are unaffected.
+
+#### 3. Verify the wrapper is working
+
+Run a short Codex task and inspect the file:
+
+```bash
+tail -5 "${AGENT_RECALL_CODEX_JSONL:-$HOME/.agent-recall/codex.jsonl}"
+```
+
+You should see JSONL lines that include a `usage` block. `agent-recall` normalises this automatically.
+
+### Capture from Claude Code — manual one-shot
 
 Claude Code supports structured JSON output for print mode with `-p` and `--output-format json`:
 
@@ -84,7 +144,76 @@ Claude Code supports structured JSON output for print mode with `-p` and `--outp
 claude -p "review this project" --output-format json | tee -a "$HOME/.agent-recall/claude.jsonl"
 ```
 
-If you want a line-oriented stream, `--output-format stream-json` is usually a better fit. `agent-recall` reads token fields from `usage`, `last_token_usage`, and similar nested blocks when present.
+For a line-oriented stream, `--output-format stream-json` combined with `--verbose` is usually a better fit. `agent-recall` reads token fields from `usage`, `last_token_usage`, and similar nested blocks when present.
+
+```bash
+claude -p "review this project" --verbose --output-format stream-json | tee -a "$HOME/.agent-recall/claude.jsonl"
+```
+
+### Capture from Claude Code — automatic Stop hook (recommended)
+
+Claude Code supports shell hooks that fire automatically at the end of every session. Use the **Stop** hook to append token usage to the JSONL file without changing your normal workflow.
+
+#### 1. Install the hook script
+
+Copy the script from the `hooks/` directory to a stable location and make it executable:
+
+```bash
+mkdir -p "$HOME/.agent-recall/hooks"
+cp hooks/claude-recall.sh "$HOME/.agent-recall/hooks/claude-recall.sh"
+chmod +x "$HOME/.agent-recall/hooks/claude-recall.sh"
+```
+
+#### 2. Register the hook in Claude Code settings
+
+Open (or create) `~/.claude/settings.json` and add the `Stop` hook:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.agent-recall/hooks/claude-recall.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If `settings.json` already exists and contains other keys, merge the `"hooks"` block into the existing JSON — do not replace the whole file.
+
+#### 3. Set the environment variable
+
+Add this line to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export AGENT_RECALL_CLAUDE_JSONL="$HOME/.agent-recall/claude.jsonl"
+```
+
+Reload your shell (`source ~/.zshrc`) and then start `agent-recall` as usual.
+
+#### How it works
+
+After each Claude Code session the Stop hook fires. Claude Code passes a JSON payload — including the `usage` block with `input_tokens` and `output_tokens` — to the script via stdin. The script writes one JSONL line to the watched file, and the dashboard picks it up on the next poll cycle.
+
+#### Verify the hook is working
+
+Run a short Claude Code command, then inspect the file:
+
+```bash
+tail -5 "$HOME/.agent-recall/claude.jsonl"
+```
+
+You should see a new line similar to:
+
+```jsonl
+{"agent_name": "claude", "input_tokens": 312, "output_tokens": 87, "timestamp": "2026-04-17T14:00:00+00:00", "source": "claude-code-hook"}
+```
 
 ## Installation
 
