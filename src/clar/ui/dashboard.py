@@ -15,7 +15,7 @@ from ..models import AgentStatus
 
 @dataclass(slots=True)
 class DashboardOptions:
-    title: str = "agent-recall dashboard"
+    title: str = "mem dashboard"
     refresh_per_second: float = 2.0
 
 
@@ -46,16 +46,16 @@ def build_summary_panel(snapshot: Iterable[AgentStatus], running: bool) -> Panel
     summary.add_row("Top agent", top_agent)
     summary.add_row("Last update", last_update)
 
-    title = Text("Overview", style="bold")
-    return Panel(summary, title=title, border_style="green" if running else "yellow")
+    title = Text("Overview", style="bold #F7B500")
+    return Panel(summary, title=title, border_style="#E93A7D" if running else "#F98C2B")
 
 
 def build_detail_table(snapshot: Iterable[AgentStatus]) -> Table:
     table = Table(title="Agent Token Usage", expand=True, show_lines=False)
-    table.add_column("Agent", style="cyan", no_wrap=True)
-    table.add_column("Input", justify="right")
-    table.add_column("Output", justify="right")
-    table.add_column("Total", justify="right")
+    table.add_column("Agent", style="#E93A7D", no_wrap=True)
+    table.add_column("Input", justify="right", style="#F98C2B")
+    table.add_column("Output", justify="right", style="#F98C2B")
+    table.add_column("Total", justify="right", style="#F7B500")
     table.add_column("Last Update", no_wrap=True)
     table.add_column("Source", no_wrap=True)
     table.add_column("State", no_wrap=True)
@@ -81,13 +81,13 @@ def build_detail_table(snapshot: Iterable[AgentStatus]) -> Table:
 def render_dashboard(
     snapshot: Iterable[AgentStatus],
     running: bool,
-    title: str = "agent-recall",
+    title: str = "mem",
     view: DashboardViewMode = "both",
 ) -> Panel | Group:
     summary_panel = build_summary_panel(snapshot, running)
     detail_table = build_detail_table(snapshot)
     header = Text()
-    header.append(f"{title}\n", style="bold")
+    header.append(f"{title}\n", style="bold #E93A7D")
     header.append(f"Service: {'running' if running else 'stopped'}", style="green" if running else "yellow")
     if view == "summary":
         return Panel(summary_panel.renderable, title=header)

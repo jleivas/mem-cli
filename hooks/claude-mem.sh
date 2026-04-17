@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# claude-recall.sh — Claude Code Stop hook for agent-recall
+# claude-mem.sh — Claude Code Stop hook for mem
 #
 # Reads the Stop hook payload from stdin, extracts token usage,
-# and appends a JSONL event to the file watched by agent-recall.
+# and appends a JSONL event to the file watched by mem.
 #
 # Install:
-#   1. Copy or symlink this script to a stable path, e.g. ~/.agent-recall/hooks/claude-recall.sh
-#   2. Make it executable: chmod +x ~/.agent-recall/hooks/claude-recall.sh
+#   1. Copy or symlink this script to a stable path, e.g. ~/.mem-cli/hooks/claude-mem.sh
+#   2. Make it executable: chmod +x ~/.mem-cli/hooks/claude-mem.sh
 #   3. Add the Stop hook to ~/.claude/settings.json (see README for the exact stanza)
-#   4. Set AGENT_RECALL_CLAUDE_JSONL in your shell profile (or let it default below)
+#   4. Set MEM_CLAUDE_JSONL in your shell profile (or let it default below)
 
 set -euo pipefail
 
-JSONL_FILE="${AGENT_RECALL_CLAUDE_JSONL:-$HOME/.agent-recall/claude.jsonl}"
+JSONL_FILE="${MEM_CLAUDE_JSONL:-$HOME/.mem-cli/claude.jsonl}"
 mkdir -p "$(dirname "$JSONL_FILE")"
 
 python3 - "$JSONL_FILE" <<'PYEOF'

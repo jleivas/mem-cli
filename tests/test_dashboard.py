@@ -1,6 +1,6 @@
-from agent_recall.models import TokenEvent
-from agent_recall.services.token_tracker import TokenTracker
-from agent_recall.ui.dashboard import build_detail_table, build_summary_panel, render_dashboard
+from clar.models import TokenEvent
+from clar.services.token_tracker import TokenTracker
+from clar.ui.dashboard import build_detail_table, build_summary_panel, render_dashboard
 
 
 def _snapshot():
@@ -23,4 +23,3 @@ def test_build_detail_table_contains_source_column() -> None:
 def test_render_dashboard_supports_both_view() -> None:
     renderable = render_dashboard(_snapshot(), True, view="both")
     assert renderable is not None
-

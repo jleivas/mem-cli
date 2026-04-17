@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-recall"
+name = "mem-cli"
 version = "0.1.0"
-description = "Local project memory and token observability for AI agents."
+description = "Mem CLI for AI agents — local token observability and memory."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-  { name = "agent-recall contributors" }
+  { name = "mem-cli contributors" }
 ]
 dependencies = [
   "typer>=0.15.0",
@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-agent-recall = "agent_recall.cli:main"
+mem = "clar.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

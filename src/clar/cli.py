@@ -17,8 +17,9 @@ from .storage.runtime_state import RuntimeStateStore
 from .ui.dashboard import live_dashboard
 from .ui.dashboard import DashboardViewMode
 
-app = typer.Typer(add_completion=False, help="Local agent memory and token observability.")
+app = typer.Typer(add_completion=False, help="Mem CLI for AI agents — local token observability and memory.")
 console = Console()
+CLI_NAME = "mem"
 
 
 def _registry() -> ProcessRegistry:
@@ -27,10 +28,10 @@ def _registry() -> ProcessRegistry:
 
 def _print_menu() -> None:
     console.print()
-    console.print(Rule(f"[bold cyan]agent-recall[/bold cyan]  [dim]v{APP_VERSION}[/dim]"))
+    console.print(Rule(f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]  [dim]v{APP_VERSION}[/dim]"))
     console.print()
     menu = Table.grid(padding=(0, 2))
-    menu.add_column(style="bold cyan", justify="right")
+    menu.add_column(style="bold #F98C2B", justify="right")
     menu.add_column(style="white")
     menu.add_row("1", "Start monitor")
     menu.add_row("2", "Stop monitor")
@@ -45,10 +46,10 @@ def _run_menu() -> None:
     while True:
         _print_menu()
         try:
-            choice = console.input("[bold]>[/bold] ").strip()
+            choice = console.input("[bold #F7B500]>[/bold #F7B500] ").strip()
         except (EOFError, KeyboardInterrupt):
             console.print()
-            raise typer.Exit()
+            return
 
         if choice == "1":
             start()
@@ -60,7 +61,7 @@ def _run_menu() -> None:
         elif choice == "4":
             status()
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
-            raise typer.Exit()
+            return
         else:
             console.print(f"[yellow]Unknown option: {choice!r}. Enter 0-4.[/yellow]")
 
@@ -73,13 +74,13 @@ def start() -> None:
     try:
         state = _registry().start()
     except RuntimeError as exc:
-        console.print(Panel.fit(f"[red]{exc}[/red]", title="agent-recall"))
+        console.print(Panel.fit(f"[red]{exc}[/red]", title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]"))
         raise typer.Exit(code=1) from exc
 
     console.print(
         Panel.fit(
             f"[green]Started[/green]\nPID: {state.pid}\nState: {get_runtime_state_path()}",
-            title="agent-recall",
+            title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]",
         )
     )
 
@@ -89,10 +90,10 @@ def stop() -> None:
     """Stop the local monitor."""
     state = _registry().stop()
     if state is None:
-        console.print(Panel.fit("[yellow]No running monitor found.[/yellow]", title="agent-recall"))
+        console.print(Panel.fit("[yellow]No running monitor found.[/yellow]", title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]"))
         return
 
-    console.print(Panel.fit("[green]Stopped[/green]", title="agent-recall"))
+    console.print(Panel.fit("[green]Stopped[/green]", title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]"))
 
 
 @app.command()
@@ -100,7 +101,7 @@ def status() -> None:
     """Show monitor status."""
     state = _registry().load_state()
     table = Table(title="Runtime Status", expand=True)
-    table.add_column("Field", style="cyan")
+    table.add_column("Field", style="#F98C2B")
     table.add_column("Value", style="white")
 
     if not state:

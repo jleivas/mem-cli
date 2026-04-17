@@ -72,7 +72,7 @@ class MonitorService:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, name="agent-recall-monitor", daemon=True)
+        self._thread = threading.Thread(target=self._run_loop, name="mem-monitor", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:

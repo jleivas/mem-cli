@@ -1,5 +1,5 @@
-from agent_recall.models import TokenEvent
-from agent_recall.services.token_tracker import TokenTracker
+from clar.models import TokenEvent
+from clar.services.token_tracker import TokenTracker
 
 
 def test_register_event_and_snapshot() -> None:
@@ -16,4 +16,3 @@ def test_register_event_and_snapshot() -> None:
     assert item.output_tokens == 27
     assert item.total_tokens == 42
     assert item.source == "test"
-

@@ -1,6 +1,6 @@
-# agent-recall
+# mem-cli
 
-`agent-recall` is a local, open source, cross-platform CLI for agent memory and usage observability.
+`mem-cli` is a local, open source, cross-platform CLI for token observability and agent memory.
 
 It starts as a lightweight MVP focused on:
 
@@ -19,7 +19,7 @@ The project is intentionally starting small. This first release is only the foun
 
 What this MVP does:
 
-- installs as an `agent-recall` command
+- installs as a `mem` command
 - starts a local monitor process
 - stops the monitor process
 - reports current runtime status
@@ -44,16 +44,16 @@ The fastest path to seeing real data in the dashboard:
 # 1. Install
 pip install -e .
 
-# 2. Point agent-recall at your capture files
-export AGENT_RECALL_CLAUDE_JSONL="$HOME/.agent-recall/claude.jsonl"
-export AGENT_RECALL_CODEX_JSONL="$HOME/.agent-recall/codex.jsonl"
-mkdir -p "$HOME/.agent-recall"
+# 2. Point mem at your capture files
+export MEM_CLAUDE_JSONL="$HOME/.mem-cli/claude.jsonl"
+export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
+mkdir -p "$HOME/.mem-cli"
 
 # 3. Start the dashboard
-agent-recall dashboard
+mem dashboard
 
 # In another terminal — send a Claude Code command and capture it
-claude -p "hello" --verbose --output-format stream-json | tee -a "$HOME/.agent-recall/claude.jsonl"
+claude -p "hello" --verbose --output-format stream-json | tee -a "$HOME/.mem-cli/claude.jsonl"
 ```
 
 The dashboard polls both files every second. Token counts appear within two seconds of each captured event.
@@ -62,13 +62,13 @@ The dashboard polls both files every second. Token counts appear within two seco
 
 ## Local JSONL Adapters
 
-`agent-recall` reads token events from local JSON or JSONL files written by the CLIs you already use.
+`mem-cli` reads token events from local JSON or JSONL files written by the CLIs you already use.
 
 Use these environment variables:
 
-- `AGENT_RECALL_CODEX_JSONL` for a JSONL file that represents Codex token events
-- `AGENT_RECALL_CLAUDE_JSONL` for a JSONL file that represents Claude token events
-- `AGENT_RECALL_JSONL_PATHS` for extra comma-separated JSONL paths
+- `MEM_CODEX_JSONL` for a JSONL file that represents Codex token events
+- `MEM_CLAUDE_JSONL` for a JSONL file that represents Claude token events
+- `MEM_JSONL_PATHS` for extra comma-separated JSONL paths
 
 The adapter accepts one JSON object per line, a pretty-printed JSON document, or a JSON array of events. Example:
 
@@ -82,10 +82,10 @@ If `agent_name` is omitted, the configured agent label is used.
 Example configuration:
 
 ```bash
-mkdir -p "$HOME/.agent-recall"
-export AGENT_RECALL_CODEX_JSONL="$HOME/.agent-recall/codex.jsonl"
-export AGENT_RECALL_CLAUDE_JSONL="$HOME/.agent-recall/claude.jsonl"
-agent-recall dashboard --view both
+mkdir -p "$HOME/.mem-cli"
+export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
+export MEM_CLAUDE_JSONL="$HOME/.mem-cli/claude.jsonl"
+mem dashboard --view both
 ```
 
 If the files are empty or not configured, the dashboard will stay idle instead of fabricating token data.
@@ -95,7 +95,7 @@ If the files are empty or not configured, the dashboard will stay idle instead o
 The non-interactive subcommand is `codex exec`. Use `--json` to emit JSONL and tee it into the watched file:
 
 ```bash
-codex exec --json "review this project" | tee -a "$HOME/.agent-recall/codex.jsonl"
+codex exec --json "review this project" | tee -a "$HOME/.mem-cli/codex.jsonl"
 ```
 
 The JSONL reader extracts token counts from top-level fields or nested `usage` objects.
@@ -109,7 +109,7 @@ Codex CLI does not have a native hook system, so the recommended approach is a s
 Add to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
-export AGENT_RECALL_CODEX_JSONL="$HOME/.agent-recall/codex.jsonl"
+export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
 ```
 
 #### 2. Add the wrapper function
@@ -118,9 +118,9 @@ In the same file, define a function that wraps `codex exec`:
 
 ```bash
 codex-track() {
-  mkdir -p "$(dirname "${AGENT_RECALL_CODEX_JSONL:-$HOME/.agent-recall/codex.jsonl}")"
+  mkdir -p "$(dirname "${MEM_CODEX_JSONL:-$HOME/.mem-cli/codex.jsonl}")"
   command codex exec --json "$@" \
-    | tee -a "${AGENT_RECALL_CODEX_JSONL:-$HOME/.agent-recall/codex.jsonl}"
+    | tee -a "${MEM_CODEX_JSONL:-$HOME/.mem-cli/codex.jsonl}"
 }
 ```
 
@@ -131,23 +131,23 @@ Reload your shell (`source ~/.zshrc`). Use `codex-track` instead of `codex exec`
 Run a short Codex task and inspect the file:
 
 ```bash
-tail -5 "${AGENT_RECALL_CODEX_JSONL:-$HOME/.agent-recall/codex.jsonl}"
+tail -5 "${MEM_CODEX_JSONL:-$HOME/.mem-cli/codex.jsonl}"
 ```
 
-You should see JSONL lines that include a `usage` block. `agent-recall` normalises this automatically.
+You should see JSONL lines that include a `usage` block. `mem` normalises this automatically.
 
 ### Capture from Claude Code — manual one-shot
 
 Claude Code supports structured JSON output for print mode with `-p` and `--output-format json`:
 
 ```bash
-claude -p "review this project" --output-format json | tee -a "$HOME/.agent-recall/claude.jsonl"
+claude -p "review this project" --output-format json | tee -a "$HOME/.mem-cli/claude.jsonl"
 ```
 
-For a line-oriented stream, `--output-format stream-json` combined with `--verbose` is usually a better fit. `agent-recall` reads token fields from `usage`, `last_token_usage`, and similar nested blocks when present.
+For a line-oriented stream, `--output-format stream-json` combined with `--verbose` is usually a better fit. `mem` reads token fields from `usage`, `last_token_usage`, and similar nested blocks when present.
 
 ```bash
-claude -p "review this project" --verbose --output-format stream-json | tee -a "$HOME/.agent-recall/claude.jsonl"
+claude -p "review this project" --verbose --output-format stream-json | tee -a "$HOME/.mem-cli/claude.jsonl"
 ```
 
 ### Capture from Claude Code — automatic Stop hook (recommended)
@@ -159,9 +159,9 @@ Claude Code supports shell hooks that fire automatically at the end of every ses
 Copy the script from the `hooks/` directory to a stable location and make it executable:
 
 ```bash
-mkdir -p "$HOME/.agent-recall/hooks"
-cp hooks/claude-recall.sh "$HOME/.agent-recall/hooks/claude-recall.sh"
-chmod +x "$HOME/.agent-recall/hooks/claude-recall.sh"
+mkdir -p "$HOME/.mem-cli/hooks"
+cp hooks/claude-mem.sh "$HOME/.mem-cli/hooks/claude-mem.sh"
+chmod +x "$HOME/.mem-cli/hooks/claude-mem.sh"
 ```
 
 #### 2. Register the hook in Claude Code settings
@@ -176,7 +176,7 @@ Open (or create) `~/.claude/settings.json` and add the `Stop` hook:
         "hooks": [
           {
             "type": "command",
-            "command": "~/.agent-recall/hooks/claude-recall.sh"
+            "command": "~/.mem-cli/hooks/claude-mem.sh"
           }
         ]
       }
@@ -192,10 +192,10 @@ If `settings.json` already exists and contains other keys, merge the `"hooks"` b
 Add this line to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
-export AGENT_RECALL_CLAUDE_JSONL="$HOME/.agent-recall/claude.jsonl"
+export MEM_CLAUDE_JSONL="$HOME/.mem-cli/claude.jsonl"
 ```
 
-Reload your shell (`source ~/.zshrc`) and then start `agent-recall` as usual.
+Reload your shell (`source ~/.zshrc`) and then start `mem` as usual.
 
 #### How it works
 
@@ -206,7 +206,7 @@ After each Claude Code session the Stop hook fires. Claude Code passes a JSON pa
 Run a short Claude Code command, then inspect the file:
 
 ```bash
-tail -5 "$HOME/.agent-recall/claude.jsonl"
+tail -5 "$HOME/.mem-cli/claude.jsonl"
 ```
 
 You should see a new line similar to:
@@ -234,36 +234,36 @@ pip install -e ".[dev]"
 Start the local monitor:
 
 ```bash
-agent-recall start
+mem start
 ```
 
 Check status:
 
 ```bash
-agent-recall status
+mem status
 ```
 
 Open the live dashboard:
 
 ```bash
-agent-recall dashboard
+mem dashboard
 ```
 
 Stop the monitor:
 
 ```bash
-agent-recall stop
+mem stop
 ```
 
 Show the version:
 
 ```bash
-agent-recall version
+mem version
 ```
 
 ## Runtime State
 
-`agent-recall` stores minimal runtime state locally in the user home directory by default. The state is intentionally small and easy to clean up.
+`mem` stores minimal runtime state locally in the user home directory by default (`~/.mem-cli/`). The state is intentionally small and easy to clean up.
 
 ## Roadmap
 

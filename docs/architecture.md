@@ -1,6 +1,6 @@
 # Architecture
 
-`agent-recall` is designed as a small local runtime that can grow into a project-aware memory and observability layer.
+`mem-cli` is designed as a small local runtime that can grow into a project-aware memory and observability layer.
 
 ## Modular Layout
 

@@ -33,11 +33,11 @@ class ProcessRegistry:
     def start(self) -> RuntimeState:
         current = self.load_state()
         if current and current.running:
-            raise RuntimeError("agent-recall is already running.")
+            raise RuntimeError("mem-cli is already running.")
 
         process = self._spawn_daemon()
         if not self._wait_for_process_ready(process):
-            raise RuntimeError("agent-recall daemon exited before becoming ready.")
+            raise RuntimeError("mem-cli daemon exited before becoming ready.")
         state = RuntimeState(
             running=True,
             pid=process.pid,
@@ -68,7 +68,7 @@ class ProcessRegistry:
         command = [
             sys.executable,
             "-c",
-            "from agent_recall.app import run_daemon; run_daemon()",
+            "from clar.app import run_daemon; run_daemon()",
         ]
         creationflags = 0
         if os.name == "nt":

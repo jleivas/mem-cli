@@ -1,7 +1,8 @@
 from typer.testing import CliRunner
 
-from agent_recall import APP_VERSION
-from agent_recall.cli import app
+from clar import APP_VERSION
+from clar.cli import app
+from clar.cli import _run_menu
 
 
 def test_version_command() -> None:
@@ -28,7 +29,7 @@ def test_start_and_stop_commands(monkeypatch) -> None:
         def load_state(self):
             return None
 
-    monkeypatch.setattr("agent_recall.cli._registry", lambda: FakeRegistry())
+    monkeypatch.setattr("clar.cli._registry", lambda: FakeRegistry())
 
     runner = CliRunner()
     start_result = runner.invoke(app, ["start"])
@@ -49,9 +50,16 @@ def test_status_command(monkeypatch) -> None:
         def load_state(self):
             return FakeState()
 
-    monkeypatch.setattr("agent_recall.cli._registry", lambda: FakeRegistry())
+    monkeypatch.setattr("clar.cli._registry", lambda: FakeRegistry())
 
     runner = CliRunner()
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 0
     assert "running" in result.output
+
+
+def test_menu_quit_returns_cleanly(monkeypatch) -> None:
+    monkeypatch.setattr("clar.cli._print_menu", lambda: None)
+    monkeypatch.setattr("clar.cli.console.input", lambda prompt: "0")
+
+    _run_menu()

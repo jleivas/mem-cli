@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This repository is `agent-recall`, a local CLI for agent memory and token observability.
+This repository is `mem-cli` — a local CLI for token observability and agent memory.
 
 ## Working Rules
 
@@ -14,8 +14,8 @@ This repository is `agent-recall`, a local CLI for agent memory and token observ
 ## Project Facts
 
 - Python 3.11+
-- CLI entrypoint: `agent-recall`
-- Main package: `src/agent_recall`
+- CLI entrypoint: `mem`
+- Main package: `src/clar`
 - Tests: `tests/`
 
 ## Token Tracking Notes
