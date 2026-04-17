@@ -33,9 +33,10 @@ ACCENT_ORANGE = "#F98C2B"
 ACCENT_YELLOW = "#F7B500"
 
 DASHBOARD_ACTIONS = (
-    ("1", "Save snapshot", "Save the currently visible dashboard to local history."),
-    ("2", "Open history", "Browse saved snapshots and load one back into the dashboard."),
-    ("3", "Reset live data", "Clear the tracker and truncate the watched JSONL files."),
+    ("1", "Run realtime dashboard", "Resume live token tracking in realtime."),
+    ("2", "Save snapshot", "Save the current paused dashboard to local history."),
+    ("3", "Open history", "Browse saved snapshots and load one back into the dashboard."),
+    ("4", "Reset live data", "Clear the tracker and truncate the watched JSONL files."),
     ("0", "Back to main menu", "Return to the main CLI menu."),
 )
 
@@ -195,13 +196,16 @@ def _build_live_footer_panel(message: str) -> Panel:
 def _normalize_choice(raw: str) -> str:
     value = raw.strip().lower()
     aliases = {
+        "realtime": "1",
+        "run": "1",
+        "resume": "1",
         "snapshot": "1",
-        "save": "1",
-        "history": "2",
-        "browse": "2",
-        "open": "2",
-        "reset": "3",
-        "clear": "3",
+        "save": "2",
+        "history": "3",
+        "browse": "3",
+        "open": "3",
+        "reset": "4",
+        "clear": "4",
         "back": "0",
         "menu": "0",
         "quit": "0",
@@ -337,34 +341,38 @@ def live_dashboard(
     store = history_store or DashboardSnapshotStore()
     pinned_snapshot: list[AgentStatus] | None = None
     pinned_history_path: Path | None = None
-    footer_message = "Press Ctrl+C to pause real-time updates."
-    active_snapshot = _collect_rows(snapshot_provider())
-    renderable = render_dashboard(
-        active_snapshot,
-        running_provider(),
-        view=view,
-        mode_label="live",
-        footer_message=footer_message,
-        show_actions=False,
-    )
+    footer_message = "Press Ctrl+C to pause and show the menu."
 
-    try:
-        with Live(renderable, console=console, refresh_per_second=refresh_per_second, screen=True, auto_refresh=False) as live:
-            while True:
-                active_snapshot = _collect_rows(snapshot_provider())
-                renderable = render_dashboard(
-                    active_snapshot,
-                    running_provider(),
-                    view=view,
-                    mode_label="live",
-                    footer_message="Press Ctrl+C to pause real-time updates.",
-                    show_actions=False,
-                )
-                live.update(renderable)
-                live.refresh()
-                time.sleep(max(0.1, 1.0 / refresh_per_second))
-    except KeyboardInterrupt:
-        pass
+    def _run_realtime_dashboard() -> None:
+        active_snapshot = _collect_rows(snapshot_provider())
+        renderable = render_dashboard(
+            active_snapshot,
+            running_provider(),
+            view=view,
+            mode_label="live",
+            footer_message=footer_message,
+            show_actions=False,
+        )
+
+        try:
+            with Live(renderable, console=console, refresh_per_second=refresh_per_second, screen=True, auto_refresh=False) as live:
+                while True:
+                    active_snapshot = _collect_rows(snapshot_provider())
+                    renderable = render_dashboard(
+                        active_snapshot,
+                        running_provider(),
+                        view=view,
+                        mode_label="live",
+                        footer_message="Press Ctrl+C to pause and show the menu.",
+                        show_actions=False,
+                    )
+                    live.update(renderable)
+                    live.refresh()
+                    time.sleep(max(0.1, 1.0 / refresh_per_second))
+        except KeyboardInterrupt:
+            return
+
+    _run_realtime_dashboard()
 
     footer_message = "Choose an action below."
     mode: Literal["live", "history_list", "history_record"] = "live"
@@ -383,15 +391,19 @@ def live_dashboard(
                     show_actions=True,
                 )
             )
-            choice = _prompt_for_choice(console, {"1", "2", "3", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
+            choice = _prompt_for_choice(console, {"1", "2", "3", "4", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
 
             if choice == "1":
+                footer_message = "Press Ctrl+C to pause and show the menu."
+                _run_realtime_dashboard()
+                footer_message = "Realtime dashboard paused."
+            elif choice == "2":
                 saved_path = store.save(active_snapshot, source="live")
                 footer_message = f"Snapshot saved: {saved_path.name}"
-            elif choice == "2":
+            elif choice == "3":
                 mode = "history_list"
                 footer_message = "Choose a saved snapshot."
-            elif choice == "3":
+            elif choice == "4":
                 if reset_provider is not None:
                     reset_provider()
                 clear_configured_jsonl_files()
