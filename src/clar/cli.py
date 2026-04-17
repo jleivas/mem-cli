@@ -5,13 +5,10 @@ import os
 from typing import cast
 
 import typer
-from rich.console import Console, Group
 from rich.align import Align
 from rich.box import ROUNDED
-from rich.layout import Layout
-from rich.live import Live
+from rich.console import Console, Group
 from rich.panel import Panel
-from rich.padding import Padding
 from rich.table import Table
 from rich.text import Text
 
@@ -61,163 +58,123 @@ def _registry() -> ProcessRegistry:
     return ProcessRegistry(RuntimeStateStore(get_runtime_state_path()))
 
 
-def _brand_wave() -> Text:
-    wave = Text()
-    wave.append("╭────╮    ", style=ACCENT_PINK)
-    wave.append("╭──╮", style=ACCENT_ORANGE)
-    wave.append("    ╭──╮        ", style=ACCENT_YELLOW)
-    wave.append("╭──", style=ACCENT_YELLOW)
-    return wave
-
-
-def _build_menu_panel() -> Panel:
-    header = Text()
-    header.append("mem", style=f"bold {ACCENT_PINK}")
-    header.append("  ")
-    header.append("CLI", style=f"bold {ACCENT_YELLOW}")
-    header.append("  ")
-    header.append(f"v{APP_VERSION}", style=f"bold {ACCENT_YELLOW}")
-
-    subtitle = Text("Local token observability & agent memory", style="dim white")
-    wave = Align.center(_brand_wave())
-
-    return Panel(
-        Align.center(
-            Group(
-                Align.center(header),
-                Align.center(subtitle),
-                wave,
-            )
-        ),
-        box=ROUNDED,
-        border_style=ACCENT_PINK,
-        padding=(1, 2),
-    )
+def _build_brand_line() -> Text:
+    t = Text()
+    t.append("mem", style=f"bold {ACCENT_PINK}")
+    t.append(f"  v{APP_VERSION}", style=ACCENT_YELLOW)
+    t.append("  ·  ", style="dim")
+    t.append("Token observability & agent memory", style="dim white")
+    return t
 
 
 def _build_menu_options() -> Table:
-    table = Table.grid(expand=True)
+    table = Table.grid(padding=(0, 1))
     for _ in MENU_ITEMS:
-        table.add_column(ratio=1)
+        table.add_column()
 
     cells = []
-    for key, title, description in MENU_ITEMS:
-        key_style = f"bold {ACCENT_YELLOW}" if key == "0" else f"bold {ACCENT_ORANGE}"
-        title_style = f"bold {ACCENT_PINK}" if key in {"1", "3"} else "white"
-        cells.append(
-            Panel(
-                Group(
-                    Align.center(Text(key, style=key_style)),
-                    Align.center(Text(title, style=title_style)),
-                    Align.center(Text(description, style="dim")),
-                ),
-                box=ROUNDED,
-                border_style=ACCENT_ORANGE if key != "0" else ACCENT_YELLOW,
-                padding=(1, 1),
-            )
-        )
+    for key, title, _ in MENU_ITEMS:
+        is_quit = key == "0"
+        key_style = f"bold {ACCENT_YELLOW}" if is_quit else f"bold {ACCENT_ORANGE}"
+        title_style = f"bold {ACCENT_PINK}" if key in {"1", "3"} else ("dim white" if is_quit else "white")
+        label = Text()
+        label.append(f" {key} ", style=f"reverse {key_style}")
+        label.append(f" {title}", style=title_style)
+        cells.append(Panel(
+            Align.center(label),
+            box=ROUNDED,
+            border_style=ACCENT_YELLOW if is_quit else ACCENT_ORANGE,
+            padding=(0, 0),
+        ))
 
     table.add_row(*cells)
     return table
 
 
-def _make_shell(header: Panel | None, body: Panel | Table | Group, footer: Panel) -> Layout:
-    layout = Layout(name="root")
-    if header is None:
-        layout.split_column(
-            Layout(body, name="body", ratio=1),
-            Layout(footer, name="footer", size=3),
-        )
-    else:
-        layout.split_column(
-            Layout(header, name="header", size=5),
-            Layout(body, name="body", ratio=1),
-            Layout(footer, name="footer", size=3),
-        )
-    return layout
-
 
 def _render_footer(message: str = "Use the number keys to navigate.") -> Panel:
-    footer = Text()
-    footer.append("1", style=f"bold {ACCENT_ORANGE}")
-    footer.append(" Start  ")
-    footer.append("2", style=f"bold {ACCENT_ORANGE}")
-    footer.append(" Stop  ")
-    footer.append("3", style=f"bold {ACCENT_ORANGE}")
-    footer.append(" Dashboard  ")
-    footer.append("4", style=f"bold {ACCENT_ORANGE}")
-    footer.append(" Status  ")
-    footer.append("0", style=f"bold {ACCENT_YELLOW}")
-    footer.append(" Quit", style="white")
-
+    line = Text()
+    line.append("1", style=f"bold {ACCENT_ORANGE}")
+    line.append(" Start  ")
+    line.append("2", style=f"bold {ACCENT_ORANGE}")
+    line.append(" Stop  ")
+    line.append("3", style=f"bold {ACCENT_ORANGE}")
+    line.append(" Dashboard  ")
+    line.append("4", style=f"bold {ACCENT_ORANGE}")
+    line.append(" Status  ")
+    line.append("0", style=f"bold {ACCENT_YELLOW}")
+    line.append(" Quit")
     return Panel(
-        Group(
-            Align.center(Text(message, style="bold white")),
-            Align.center(footer),
-        ),
+        Align.center(line),
         box=ROUNDED,
         border_style=ACCENT_YELLOW,
         padding=(0, 1),
     )
 
 
-def _render_home_screen() -> Panel:
-    body = Group(
-        _build_menu_panel(),
-        Panel(_build_menu_options(), box=ROUNDED, border_style=ACCENT_ORANGE, title="Actions"),
-        Panel.fit("[dim]Enter a number to continue.[/dim]", border_style=ACCENT_YELLOW),
-    )
-    return Padding(Panel(
-        body,
-        box=ROUNDED,
-        border_style=ACCENT_PINK,
-        padding=(1, 2),
-    ), (1, 0, 0, 0))
+def _render_prompt_line() -> Text:
+    t = Text()
+    t.append(" > ", style=f"bold {ACCENT_YELLOW}")
+    return t
 
 
-def _render_home_layout() -> Layout:
-    body = Panel(
-        Group(
-            Align.center(_build_menu_panel()),
-            Align.center(_build_menu_options()),
+def _render_home_screen() -> Group:
+    return Group(
+        Text(""),
+        Panel(
+            _build_brand_line(),
+            box=ROUNDED,
+            border_style=ACCENT_PINK,
+            padding=(0, 1),
         ),
-        box=ROUNDED,
-        border_style=ACCENT_PINK,
-        padding=(0, 1),
+        Text(""),
+        Panel(
+            _build_menu_options(),
+            box=ROUNDED,
+            border_style=ACCENT_ORANGE,
+            padding=(0, 1),
+        ),
+        Text(""),
+        _render_footer(),
+        Text(""),
+        _render_prompt_line(),
     )
-    return Padding(_make_shell(None, body, _render_footer()), (1, 0, 0, 0))
+
+
+def _render_home_layout() -> Group:
+    return _render_home_screen()
 
 
 def _render_action_screen(result: _ActionResult) -> Panel:
     title = Text(result.title, style=f"bold {ACCENT_PINK}")
-    return Padding(Panel(
+    return Panel(
         result.body,
         box=ROUNDED,
         border_style=result.border_style,
         title=title,
-        padding=(1, 2),
-    ), (1, 0, 0, 0))
+        padding=(0, 1),
+    )
 
 
-def _render_action_layout(result: _ActionResult, message: str = "Press Enter to return to the menu.") -> Layout:
-    header = Panel.fit(
+def _render_action_layout(result: _ActionResult, message: str = "Press Enter to return to the menu.") -> Group:
+    header = Panel(
         Text.assemble(
             ("mem", f"bold {ACCENT_PINK}"),
-            ("  ", "white"),
+            ("  ·  ", "dim"),
             (result.title, f"bold {ACCENT_YELLOW}"),
         ),
         box=ROUNDED,
         border_style=result.border_style,
-        padding=(0, 2),
+        padding=(0, 1),
     )
     body = Panel(
         result.body,
         box=ROUNDED,
         border_style=result.border_style,
-        padding=(1, 2),
+        padding=(0, 1),
         title=Text(result.title, style=f"bold {ACCENT_PINK}"),
     )
-    return Padding(_make_shell(header, body, _render_footer(message)), (1, 0, 0, 0))
+    return Group(header, body, _render_footer(message))
 
 
 def _pause_for_continue() -> None:
@@ -279,49 +236,42 @@ def _status_action() -> _ActionResult:
 
 
 def _run_menu() -> None:
-    with Live(_render_home_layout(), console=console, screen=True, auto_refresh=False, refresh_per_second=30) as live:
-        while True:
-            live.update(_render_home_layout())
-            live.refresh()
-            try:
-                choice = console.input("[bold #F7B500]>[/bold #F7B500] ").strip()
-            except (EOFError, KeyboardInterrupt):
-                return
+    while True:
+        console.clear()
+        console.print(_render_home_screen())
+        try:
+            choice = console.input("").strip()
+        except (EOFError, KeyboardInterrupt):
+            return
 
-            if choice == "1":
-                result = _start_monitor_action()
-                live.update(_render_action_layout(result))
-                live.refresh()
-                _pause_for_continue()
-            elif choice == "2":
-                result = _stop_monitor_action()
-                live.update(_render_action_layout(result))
-                live.refresh()
-                _pause_for_continue()
-            elif choice == "3":
-                live.update(_render_action_layout(_ActionResult(
-                    title="Dashboard",
-                    body=Panel.fit("Launching dashboard...", border_style=ACCENT_YELLOW),
-                    border_style=ACCENT_YELLOW,
-                )))
-                live.refresh()
-                _launch_dashboard()
-            elif choice == "4":
-                result = _status_action()
-                live.update(_render_action_layout(result))
-                live.refresh()
-                _pause_for_continue()
-            elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
-                console.clear()
-                return
-            else:
-                live.update(_render_action_layout(_ActionResult(
-                    title="Unknown option",
-                    body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-4.", border_style="red"),
-                    border_style="red",
-                )))
-                live.refresh()
-                _pause_for_continue()
+        if choice == "1":
+            console.clear()
+            result = _start_monitor_action()
+            console.print(_render_action_screen(result))
+            _pause_for_continue()
+        elif choice == "2":
+            console.clear()
+            result = _stop_monitor_action()
+            console.print(_render_action_screen(result))
+            _pause_for_continue()
+        elif choice == "3":
+            _launch_dashboard()
+        elif choice == "4":
+            console.clear()
+            result = _status_action()
+            console.print(_render_action_screen(result))
+            _pause_for_continue()
+        elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
+            console.clear()
+            return
+        else:
+            console.clear()
+            console.print(_render_action_screen(_ActionResult(
+                title="Unknown option",
+                body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-4.", border_style="red"),
+                border_style="red",
+            )))
+            _pause_for_continue()
 
 
 
