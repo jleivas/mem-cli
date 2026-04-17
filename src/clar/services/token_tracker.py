@@ -50,3 +50,8 @@ class TokenTracker:
                 for name, totals in self._agents.items()
             ]
         return sorted(items, key=lambda item: item.agent_name)
+
+    def reset(self) -> None:
+        with self._lock:
+            self._agents.clear()
+            self._started_at = utc_now()

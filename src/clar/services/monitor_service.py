@@ -90,6 +90,9 @@ class MonitorService:
     def snapshot(self):
         return self.tracker.snapshot()
 
+    def reset(self) -> None:
+        self.tracker.reset()
+
     def _run_loop(self) -> None:
         while not self._stop_event.is_set():
             self.tick()

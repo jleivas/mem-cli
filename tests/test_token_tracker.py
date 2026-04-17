@@ -17,3 +17,11 @@ def test_register_event_and_snapshot() -> None:
     assert item.total_tokens == 42
     assert item.average_tokens_per_minute > 0
     assert item.source == "test"
+
+
+def test_reset_clears_snapshot() -> None:
+    tracker = TokenTracker()
+    tracker.register_event(TokenEvent(agent_name="codex", input_tokens=10, output_tokens=20, source="test"))
+    tracker.reset()
+
+    assert tracker.snapshot() == []

@@ -28,6 +28,16 @@ def ensure_app_home() -> Path:
     return app_home
 
 
+def get_history_dir() -> Path:
+    return get_app_home() / "history"
+
+
+def ensure_history_dir() -> Path:
+    history_dir = get_history_dir()
+    history_dir.mkdir(parents=True, exist_ok=True)
+    return history_dir
+
+
 def get_runtime_dir() -> Path:
     return get_app_home() / "runtime"
 
@@ -56,3 +66,30 @@ def get_default_codex_jsonl_path() -> Path:
 
 def get_default_claude_jsonl_path() -> Path:
     return ensure_app_home() / "claude.jsonl"
+
+
+def iter_configured_jsonl_paths() -> list[Path]:
+    paths: list[Path] = []
+
+    codex_path = get_codex_jsonl_path()
+    if codex_path is not None:
+        paths.append(codex_path)
+
+    claude_path = get_claude_jsonl_path()
+    if claude_path is not None:
+        paths.append(claude_path)
+
+    extra_paths = get_jsonl_paths()
+    if extra_paths:
+        for raw_path in extra_paths.split(","):
+            cleaned = raw_path.strip()
+            if cleaned:
+                paths.append(Path(cleaned).expanduser())
+
+    return paths
+
+
+def clear_configured_jsonl_files() -> None:
+    for path in iter_configured_jsonl_paths():
+        if path.exists():
+            path.write_text("", encoding="utf-8")

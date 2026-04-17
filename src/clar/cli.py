@@ -360,7 +360,12 @@ def _launch_dashboard(view: str = "both") -> None:
         return service.is_running()
 
     try:
-        live_dashboard(snapshot_provider, running_provider, view=cast(DashboardViewMode, view))
+        live_dashboard(
+            snapshot_provider,
+            running_provider,
+            reset_provider=service.reset,
+            view=cast(DashboardViewMode, view),
+        )
     except KeyboardInterrupt:
         pass
     finally:
