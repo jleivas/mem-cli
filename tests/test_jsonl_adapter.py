@@ -97,6 +97,38 @@ def test_jsonl_source_reads_pretty_printed_json_documents(tmp_path) -> None:
     assert events[0].total_tokens == 45
 
 
+def test_jsonl_source_subtracts_cached_input_tokens_codex(tmp_path) -> None:
+    """codex exec --json reports cached_input_tokens inside usage; only net new tokens should be counted."""
+    path = tmp_path / "codex.jsonl"
+    path.write_text(
+        '{"type":"turn.completed","usage":{"input_tokens":11568,"cached_input_tokens":10112,"output_tokens":21}}\n',
+        encoding="utf-8",
+    )
+
+    source = JsonlTokenSource(JsonlTokenSourceConfig(paths_by_agent={"codex": path}))
+    events = list(source.poll())
+
+    assert len(events) == 1
+    assert events[0].input_tokens == 11568 - 10112  # 1456 net new tokens
+    assert events[0].output_tokens == 21
+
+
+def test_jsonl_source_subtracts_cache_read_input_tokens_claude(tmp_path) -> None:
+    """Claude Code Stop hook may report cache_read_input_tokens; subtract them from input_tokens."""
+    path = tmp_path / "claude.jsonl"
+    path.write_text(
+        '{"agent_name":"claude","usage":{"input_tokens":5000,"cache_read_input_tokens":4800,"output_tokens":60}}\n',
+        encoding="utf-8",
+    )
+
+    source = JsonlTokenSource(JsonlTokenSourceConfig(paths_by_agent={"claude": path}))
+    events = list(source.poll())
+
+    assert len(events) == 1
+    assert events[0].input_tokens == 5000 - 4800  # 200 net new tokens
+    assert events[0].output_tokens == 60
+
+
 def test_jsonl_source_prefers_last_token_usage_for_codex(tmp_path) -> None:
     path = tmp_path / "codex.json"
     path.write_text(

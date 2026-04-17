@@ -135,8 +135,17 @@ class JsonlTokenSource:
             output_tokens = self._coerce_int(value.get("output_tokens"))
             total_tokens = value.get("total_tokens")
             if input_tokens or output_tokens or total_tokens is not None:
+                # Subtract cached tokens so the dashboard reflects new tokens
+                # only. Both "cached_input_tokens" (Codex) and
+                # "cache_read_input_tokens" (Claude) represent tokens served
+                # from the prompt cache and should not be double-counted.
+                cached = self._coerce_int(
+                    value.get("cached_input_tokens")
+                    or value.get("cache_read_input_tokens")
+                )
+                net_input = max(0, input_tokens - cached)
                 return (
-                    input_tokens,
+                    net_input,
                     output_tokens,
                     self._coerce_int(total_tokens) if total_tokens is not None else None,
                 )

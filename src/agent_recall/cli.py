@@ -5,7 +5,9 @@ from typing import cast
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.table import Table
+from rich.text import Text
 
 from . import APP_VERSION
 from .config import get_runtime_state_path
@@ -21,6 +23,48 @@ console = Console()
 
 def _registry() -> ProcessRegistry:
     return ProcessRegistry(RuntimeStateStore(get_runtime_state_path()))
+
+
+def _print_menu() -> None:
+    console.print()
+    console.print(Rule(f"[bold cyan]agent-recall[/bold cyan]  [dim]v{APP_VERSION}[/dim]"))
+    console.print()
+    menu = Table.grid(padding=(0, 2))
+    menu.add_column(style="bold cyan", justify="right")
+    menu.add_column(style="white")
+    menu.add_row("1", "Start monitor")
+    menu.add_row("2", "Stop monitor")
+    menu.add_row("3", "Dashboard")
+    menu.add_row("4", "Status")
+    menu.add_row("0", "Quit")
+    console.print(menu)
+    console.print()
+
+
+def _run_menu() -> None:
+    while True:
+        _print_menu()
+        try:
+            choice = console.input("[bold]>[/bold] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            raise typer.Exit()
+
+        if choice == "1":
+            start()
+        elif choice == "2":
+            stop()
+        elif choice == "3":
+            _launch_dashboard()
+            # blocks until Ctrl-C; loop back to menu after exit
+        elif choice == "4":
+            status()
+        elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
+            raise typer.Exit()
+        else:
+            console.print(f"[yellow]Unknown option: {choice!r}. Enter 0-4.[/yellow]")
+
+
 
 
 @app.command()
@@ -73,6 +117,24 @@ def status() -> None:
     console.print(table)
 
 
+def _launch_dashboard(view: str = "both") -> None:
+    service = build_monitor_service()
+    service.start()
+
+    def snapshot_provider():
+        return service.snapshot()
+
+    def running_provider() -> bool:
+        return service.is_running()
+
+    try:
+        live_dashboard(snapshot_provider, running_provider, view=cast(DashboardViewMode, view))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        service.stop()
+
+
 @app.command()
 def dashboard(
     view: str = typer.Option(
@@ -87,22 +149,7 @@ def dashboard(
     normalized_view = view.lower()
     if normalized_view not in {"summary", "detail", "both"}:
         raise typer.BadParameter("view must be one of: summary, detail, both")
-
-    service = build_monitor_service()
-    service.start()
-
-    def snapshot_provider():
-        return service.snapshot()
-
-    def running_provider() -> bool:
-        return service.is_running()
-
-    try:
-        live_dashboard(snapshot_provider, running_provider, view=cast(DashboardViewMode, normalized_view))
-    except KeyboardInterrupt:
-        pass
-    finally:
-        service.stop()
+    _launch_dashboard(normalized_view)
 
 
 @app.command()
@@ -112,7 +159,11 @@ def version() -> None:
 
 
 def main() -> None:
-    app()
+    import sys
+    if len(sys.argv) == 1:
+        _run_menu()
+    else:
+        app()
 
 
 if __name__ == "__main__":
