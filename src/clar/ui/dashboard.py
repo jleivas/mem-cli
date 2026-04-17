@@ -9,7 +9,6 @@ from typing import Callable, Iterable, Literal
 from rich.align import Align
 from rich.box import ROUNDED
 from rich.console import Console, Group
-from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -295,12 +294,11 @@ def render_dashboard(
 
 def _choose_history_entry(
     console: Console,
-    live: Live,
     store: DashboardSnapshotStore,
 ) -> DashboardSnapshotMeta | None:
     entries = store.list()
-    live.update(Group(_build_history_panel(entries), _build_history_footer_panel()))
-    live.refresh()
+    console.clear()
+    console.print(Group(_build_history_panel(entries), _build_history_footer_panel()))
 
     if not entries:
         _prompt_for_choice(console, {"0"})
@@ -332,56 +330,46 @@ def live_dashboard(
     mode: Literal["live", "history_list", "history_record"] = "live"
     footer_message = "Choose an action below."
 
-    with Live(
-        render_dashboard(snapshot_provider(), running_provider(), view=view, footer_message=footer_message),
-        console=console,
-        refresh_per_second=refresh_per_second,
-        screen=True,
-    ) as live:
-        while True:
-            if mode == "live":
-                active_snapshot = _collect_rows(snapshot_provider())
-                live.update(render_dashboard(active_snapshot, running_provider(), view=view, mode_label="live", footer_message=footer_message))
-            elif mode == "history_list":
-                live.update(Group(_build_history_panel(store.list()), _build_history_footer_panel()))
-            else:
-                live.update(Group(_render_history_record(pinned_snapshot or [], pinned_history_path), _build_history_record_footer_panel()))
-            live.refresh()
+    while True:
+        console.clear()
+        if mode == "live":
+            active_snapshot = _collect_rows(snapshot_provider())
+            console.print(render_dashboard(active_snapshot, running_provider(), view=view, mode_label="live", footer_message=footer_message))
+            choice = _prompt_for_choice(console, {"1", "2", "3", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
 
-            if mode == "live":
-                choice = _prompt_for_choice(console, {"1", "2", "3", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
-
-                if choice == "1":
-                    saved_path = store.save(active_snapshot, source="live")
-                    footer_message = f"Snapshot saved: {saved_path.name}"
-                elif choice == "2":
-                    mode = "history_list"
-                    footer_message = "Choose a saved snapshot."
-                elif choice == "3":
-                    if reset_provider is not None:
-                        reset_provider()
-                    clear_configured_jsonl_files()
-                    footer_message = "Live data reset."
-                elif choice == "0":
-                    return
-            elif mode == "history_list":
-                selected_entry = _choose_history_entry(console, live, store)
-                if selected_entry is None:
-                    mode = "live"
-                    footer_message = "Choose an action below."
-                else:
-                    pinned_history_path = selected_entry.path
-                    pinned_snapshot = store.load(selected_entry.path)
-                    mode = "history_record"
-                    footer_message = "History record loaded."
+            if choice == "1":
+                saved_path = store.save(active_snapshot, source="live")
+                footer_message = f"Snapshot saved: {saved_path.name}"
+            elif choice == "2":
+                mode = "history_list"
+                footer_message = "Choose a saved snapshot."
+            elif choice == "3":
+                if reset_provider is not None:
+                    reset_provider()
+                clear_configured_jsonl_files()
+                footer_message = "Live data reset."
+            elif choice == "0":
+                return
+        elif mode == "history_list":
+            console.print(Group(_build_history_panel(store.list()), _build_history_footer_panel()))
+            selected_entry = _choose_history_entry(console, store)
+            if selected_entry is None:
+                mode = "live"
+                footer_message = "Choose an action below."
             else:
-                choice = _prompt_for_choice(console, {"1", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
-                if choice == "1" and pinned_history_path is not None:
-                    store.delete(pinned_history_path)
-                    pinned_history_path = None
-                    pinned_snapshot = None
-                    mode = "history_list"
-                    footer_message = "Snapshot deleted."
-                elif choice == "0":
-                    mode = "history_list"
-                    footer_message = "Choose a saved snapshot."
+                pinned_history_path = selected_entry.path
+                pinned_snapshot = store.load(selected_entry.path)
+                mode = "history_record"
+                footer_message = "History record loaded."
+        else:
+            console.print(Group(_render_history_record(pinned_snapshot or [], pinned_history_path), _build_history_record_footer_panel()))
+            choice = _prompt_for_choice(console, {"1", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
+            if choice == "1" and pinned_history_path is not None:
+                store.delete(pinned_history_path)
+                pinned_history_path = None
+                pinned_snapshot = None
+                mode = "history_list"
+                footer_message = "Snapshot deleted."
+            elif choice == "0":
+                mode = "history_list"
+                footer_message = "Choose a saved snapshot."
