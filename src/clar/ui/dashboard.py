@@ -37,7 +37,7 @@ DASHBOARD_ACTIONS = (
     ("2", "Save snapshot", "Save the current paused dashboard to local history."),
     ("3", "Open history", "Browse saved snapshots and load one back into the dashboard."),
     ("4", "Reset live data", "Clear the tracker and truncate the watched JSONL files."),
-    ("0", "Back to main menu", "Return to the main CLI menu."),
+    ("0", "Exit dashboard", "Return to the main CLI menu."),
 )
 
 HISTORY_RECORD_ACTIONS = (
