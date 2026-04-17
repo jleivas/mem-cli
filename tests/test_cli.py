@@ -3,6 +3,9 @@ from typer.testing import CliRunner
 from clar import APP_VERSION
 from clar.cli import app
 from clar.cli import _run_menu
+from clar.cli import _render_home_screen
+from clar.cli import _render_footer
+from rich.console import Console
 
 
 def test_version_command() -> None:
@@ -59,7 +62,26 @@ def test_status_command(monkeypatch) -> None:
 
 
 def test_menu_quit_returns_cleanly(monkeypatch) -> None:
-    monkeypatch.setattr("clar.cli._print_menu", lambda: None)
     monkeypatch.setattr("clar.cli.console.input", lambda prompt: "0")
 
     _run_menu()
+
+
+def test_home_screen_renders_menu_entries() -> None:
+    console = Console(record=True, width=120)
+    console.print(_render_home_screen())
+    output = console.export_text()
+
+    assert "mem" in output
+    assert "Start monitor" in output
+    assert "Dashboard" in output
+
+
+def test_footer_renders_hotkeys() -> None:
+    console = Console(record=True, width=120)
+    console.print(_render_footer())
+    output = console.export_text()
+
+    assert "Start" in output
+    assert "Dashboard" in output
+    assert "Quit" in output

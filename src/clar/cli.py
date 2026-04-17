@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import cast
 
 import typer
 from rich.console import Console, Group
 from rich.align import Align
 from rich.box import ROUNDED
+from rich.layout import Layout
+from rich.live import Live
 from rich.panel import Panel
+from rich.padding import Padding
 from rich.table import Table
 from rich.text import Text
 
@@ -33,6 +37,13 @@ MENU_ITEMS = (
 )
 
 
+@dataclass(slots=True)
+class _ActionResult:
+    title: str
+    body: Panel | Table
+    border_style: str
+
+
 def _registry() -> ProcessRegistry:
     return ProcessRegistry(RuntimeStateStore(get_runtime_state_path()))
 
@@ -51,6 +62,8 @@ def _build_menu_panel() -> Panel:
     header.append("mem", style=f"bold {ACCENT_PINK}")
     header.append("  ")
     header.append("CLI", style=f"bold {ACCENT_YELLOW}")
+    header.append("  ")
+    header.append(f"v{APP_VERSION}", style=f"bold {ACCENT_YELLOW}")
 
     subtitle = Text("Local token observability & agent memory", style="dim white")
     wave = Align.center(_brand_wave())
@@ -70,55 +83,231 @@ def _build_menu_panel() -> Panel:
 
 
 def _build_menu_options() -> Table:
-    table = Table.grid(expand=True, padding=(0, 1))
-    table.add_column(no_wrap=True)
-    table.add_column(ratio=1)
-    table.add_column(justify="right", ratio=2)
+    table = Table.grid(expand=True)
+    for _ in MENU_ITEMS:
+        table.add_column(ratio=1)
 
+    cells = []
     for key, title, description in MENU_ITEMS:
         key_style = f"bold {ACCENT_YELLOW}" if key == "0" else f"bold {ACCENT_ORANGE}"
         title_style = f"bold {ACCENT_PINK}" if key in {"1", "3"} else "white"
-        table.add_row(
-            Text(key, style=key_style),
-            Text(title, style=title_style),
-            Text(description, style="dim"),
+        cells.append(
+            Panel(
+                Group(
+                    Align.center(Text(key, style=key_style)),
+                    Align.center(Text(title, style=title_style)),
+                    Align.center(Text(description, style="dim")),
+                ),
+                box=ROUNDED,
+                border_style=ACCENT_ORANGE if key != "0" else ACCENT_YELLOW,
+                padding=(1, 1),
+            )
         )
+
+    table.add_row(*cells)
     return table
 
 
-def _print_menu() -> None:
-    console.clear()
-    console.print(Panel.fit(f"[bold {ACCENT_PINK}]{CLI_NAME}[/bold {ACCENT_PINK}]  [dim]v{APP_VERSION}[/dim]", border_style=ACCENT_ORANGE))
-    console.print()
-    console.print(_build_menu_panel())
-    console.print()
-    console.print(Panel(_build_menu_options(), box=ROUNDED, border_style=ACCENT_ORANGE, title="Actions"))
-    console.print()
-    console.print(Panel.fit("[dim]Enter a number to continue.[/dim]", border_style=ACCENT_YELLOW))
+def _make_shell(header: Panel | None, body: Panel | Table | Group, footer: Panel) -> Layout:
+    layout = Layout(name="root")
+    if header is None:
+        layout.split_column(
+            Layout(body, name="body", ratio=1),
+            Layout(footer, name="footer", size=3),
+        )
+    else:
+        layout.split_column(
+            Layout(header, name="header", size=5),
+            Layout(body, name="body", ratio=1),
+            Layout(footer, name="footer", size=3),
+        )
+    return layout
+
+
+def _render_footer(message: str = "Use the number keys to navigate.") -> Panel:
+    footer = Text()
+    footer.append("1", style=f"bold {ACCENT_ORANGE}")
+    footer.append(" Start  ")
+    footer.append("2", style=f"bold {ACCENT_ORANGE}")
+    footer.append(" Stop  ")
+    footer.append("3", style=f"bold {ACCENT_ORANGE}")
+    footer.append(" Dashboard  ")
+    footer.append("4", style=f"bold {ACCENT_ORANGE}")
+    footer.append(" Status  ")
+    footer.append("0", style=f"bold {ACCENT_YELLOW}")
+    footer.append(" Quit", style="white")
+
+    return Panel(
+        Group(
+            Align.center(Text(message, style="bold white")),
+            Align.center(footer),
+        ),
+        box=ROUNDED,
+        border_style=ACCENT_YELLOW,
+        padding=(0, 1),
+    )
+
+
+def _render_home_screen() -> Panel:
+    body = Group(
+        _build_menu_panel(),
+        Panel(_build_menu_options(), box=ROUNDED, border_style=ACCENT_ORANGE, title="Actions"),
+        Panel.fit("[dim]Enter a number to continue.[/dim]", border_style=ACCENT_YELLOW),
+    )
+    return Padding(Panel(
+        body,
+        box=ROUNDED,
+        border_style=ACCENT_PINK,
+        padding=(1, 2),
+    ), (1, 0, 0, 0))
+
+
+def _render_home_layout() -> Layout:
+    body = Panel(
+        Group(
+            Align.center(_build_menu_panel()),
+            Align.center(_build_menu_options()),
+        ),
+        box=ROUNDED,
+        border_style=ACCENT_PINK,
+        padding=(0, 1),
+    )
+    return Padding(_make_shell(None, body, _render_footer()), (1, 0, 0, 0))
+
+
+def _render_action_screen(result: _ActionResult) -> Panel:
+    title = Text(result.title, style=f"bold {ACCENT_PINK}")
+    return Padding(Panel(
+        result.body,
+        box=ROUNDED,
+        border_style=result.border_style,
+        title=title,
+        padding=(1, 2),
+    ), (1, 0, 0, 0))
+
+
+def _render_action_layout(result: _ActionResult, message: str = "Press Enter to return to the menu.") -> Layout:
+    header = Panel.fit(
+        Text.assemble(
+            ("mem", f"bold {ACCENT_PINK}"),
+            ("  ", "white"),
+            (result.title, f"bold {ACCENT_YELLOW}"),
+        ),
+        box=ROUNDED,
+        border_style=result.border_style,
+        padding=(0, 2),
+    )
+    body = Panel(
+        result.body,
+        box=ROUNDED,
+        border_style=result.border_style,
+        padding=(1, 2),
+        title=Text(result.title, style=f"bold {ACCENT_PINK}"),
+    )
+    return Padding(_make_shell(header, body, _render_footer(message)), (1, 0, 0, 0))
+
+
+def _pause_for_continue() -> None:
+    try:
+        console.input(f"[bold {ACCENT_YELLOW}]Press Enter to return to the menu...[/bold {ACCENT_YELLOW}]")
+    except (EOFError, KeyboardInterrupt):
+        return
+
+
+def _start_monitor_action() -> _ActionResult:
+    try:
+        state = _registry().start()
+    except RuntimeError as exc:
+        return _ActionResult(
+            title="Start failed",
+            body=Panel.fit(str(exc), border_style="red"),
+            border_style="red",
+        )
+
+    table = Table.grid(padding=(0, 1))
+    table.add_row(Text("Started", style=f"bold {ACCENT_YELLOW}"), Text("monitor active", style="green"))
+    table.add_row(Text("PID", style=f"bold {ACCENT_ORANGE}"), Text(str(state.pid), style="white"))
+    table.add_row(Text("State", style=f"bold {ACCENT_PINK}"), Text(str(get_runtime_state_path()), style="white"))
+    return _ActionResult(title="Monitor started", body=table, border_style=ACCENT_PINK)
+
+
+def _stop_monitor_action() -> _ActionResult:
+    state = _registry().stop()
+    if state is None:
+        return _ActionResult(
+            title="Stop monitor",
+            body=Panel.fit("No running monitor found.", border_style=ACCENT_YELLOW),
+            border_style=ACCENT_YELLOW,
+        )
+
+    table = Table.grid(padding=(0, 1))
+    table.add_row(Text("Stopped", style=f"bold {ACCENT_YELLOW}"), Text("monitor halted", style="green"))
+    table.add_row(Text("PID", style=f"bold {ACCENT_ORANGE}"), Text(str(state.pid), style="white"))
+    return _ActionResult(title="Monitor stopped", body=table, border_style=ACCENT_ORANGE)
+
+
+def _status_action() -> _ActionResult:
+    state = _registry().load_state()
+    table = Table(title="Runtime Status", expand=True)
+    table.add_column("Field", style=ACCENT_ORANGE)
+    table.add_column("Value", style="white")
+
+    if not state:
+        table.add_row("Service", "stopped")
+        table.add_row("State file", str(get_runtime_state_path()))
+        return _ActionResult(title="Status", body=table, border_style=ACCENT_YELLOW)
+
+    table.add_row("Service", "running" if state.running else "stopped")
+    table.add_row("PID", str(state.pid) if state.pid else "-")
+    table.add_row("Started", state.started_at.isoformat() if state.started_at else "-")
+    table.add_row("Updated", state.last_updated.isoformat() if state.last_updated else "-")
+    table.add_row("State file", str(get_runtime_state_path()))
+    return _ActionResult(title="Status", body=table, border_style=ACCENT_PINK)
 
 
 def _run_menu() -> None:
-    while True:
-        _print_menu()
-        try:
-            choice = console.input("[bold #F7B500]>[/bold #F7B500] ").strip()
-        except (EOFError, KeyboardInterrupt):
-            console.print()
-            return
+    with Live(_render_home_layout(), console=console, screen=True, auto_refresh=False, refresh_per_second=30) as live:
+        while True:
+            live.update(_render_home_layout())
+            live.refresh()
+            try:
+                choice = console.input("[bold #F7B500]>[/bold #F7B500] ").strip()
+            except (EOFError, KeyboardInterrupt):
+                return
 
-        if choice == "1":
-            start()
-        elif choice == "2":
-            stop()
-        elif choice == "3":
-            _launch_dashboard()
-            # blocks until Ctrl-C; loop back to menu after exit
-        elif choice == "4":
-            status()
-        elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
-            return
-        else:
-            console.print(f"[yellow]Unknown option: {choice!r}. Enter 0-4.[/yellow]")
+            if choice == "1":
+                result = _start_monitor_action()
+                live.update(_render_action_layout(result))
+                live.refresh()
+                _pause_for_continue()
+            elif choice == "2":
+                result = _stop_monitor_action()
+                live.update(_render_action_layout(result))
+                live.refresh()
+                _pause_for_continue()
+            elif choice == "3":
+                live.update(_render_action_layout(_ActionResult(
+                    title="Dashboard",
+                    body=Panel.fit("Launching dashboard...", border_style=ACCENT_YELLOW),
+                    border_style=ACCENT_YELLOW,
+                )))
+                live.refresh()
+                _launch_dashboard()
+            elif choice == "4":
+                result = _status_action()
+                live.update(_render_action_layout(result))
+                live.refresh()
+                _pause_for_continue()
+            elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
+                return
+            else:
+                live.update(_render_action_layout(_ActionResult(
+                    title="Unknown option",
+                    body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-4.", border_style="red"),
+                    border_style="red",
+                )))
+                live.refresh()
+                _pause_for_continue()
 
 
 
@@ -126,51 +315,24 @@ def _run_menu() -> None:
 @app.command()
 def start() -> None:
     """Start the local monitor."""
-    try:
-        state = _registry().start()
-    except RuntimeError as exc:
-        console.print(Panel.fit(f"[red]{exc}[/red]", title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]"))
-        raise typer.Exit(code=1) from exc
-
-    console.print(
-        Panel.fit(
-            f"[green]Started[/green]\nPID: {state.pid}\nState: {get_runtime_state_path()}",
-            title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]",
-        )
-    )
+    result = _start_monitor_action()
+    console.print(_render_action_screen(result))
+    if result.border_style == "red":
+        raise typer.Exit(code=1)
 
 
 @app.command()
 def stop() -> None:
     """Stop the local monitor."""
-    state = _registry().stop()
-    if state is None:
-        console.print(Panel.fit("[yellow]No running monitor found.[/yellow]", title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]"))
-        return
-
-    console.print(Panel.fit("[green]Stopped[/green]", title=f"[bold #E93A7D]{CLI_NAME}[/bold #E93A7D]"))
+    result = _stop_monitor_action()
+    console.print(_render_action_screen(result))
 
 
 @app.command()
 def status() -> None:
     """Show monitor status."""
-    state = _registry().load_state()
-    table = Table(title="Runtime Status", expand=True)
-    table.add_column("Field", style="#F98C2B")
-    table.add_column("Value", style="white")
-
-    if not state:
-        table.add_row("Service", "stopped")
-        table.add_row("State file", str(get_runtime_state_path()))
-        console.print(table)
-        return
-
-    table.add_row("Service", "running" if state.running else "stopped")
-    table.add_row("PID", str(state.pid) if state.pid else "-")
-    table.add_row("Started", state.started_at.isoformat() if state.started_at else "-")
-    table.add_row("Updated", state.last_updated.isoformat() if state.last_updated else "-")
-    table.add_row("State file", str(get_runtime_state_path()))
-    console.print(table)
+    result = _status_action()
+    console.print(_render_action_screen(result))
 
 
 def _launch_dashboard(view: str = "both") -> None:
