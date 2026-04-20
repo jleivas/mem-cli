@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-codex-mem — watches ~/.codex/sessions/ for completed Codex sessions
+codex-mem — watches ~/.codex/sessions/ for Codex sessions
 and appends token usage events to the mem-cli JSONL file.
 
-A session is considered complete when it contains a
-  { "type": "event_msg", "payload": { "type": "task_complete" } }
-entry. The last preceding token_count entry carries the cumulative
-total_token_usage for the whole session.
+The watcher emits each new token_count update as it appears in the
+session JSONL. For live Codex sessions, this means the dashboard can
+update before the session finishes. The parser prefers
+last_token_usage so the emitted event represents the incremental delta,
+not the cumulative session total.
 
 Usage:
   python3 codex-mem.py --watch   # poll loop (default, for launchd/background)
@@ -30,82 +31,116 @@ JSONL_FILE = Path(
 )
 STATE_FILE = Path.home() / ".mem-cli" / "runtime" / "codex-processed.json"
 POLL_INTERVAL = int(os.environ.get("MEM_CODEX_POLL", "30"))
+STATE_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
-# State: set of already-processed session file paths
+# State: per-session line cursors
 # ---------------------------------------------------------------------------
 
-def load_processed() -> set:
+def _count_complete_lines(path: Path) -> int:
+    try:
+        raw_text = path.read_text(encoding="utf-8")
+    except OSError:
+        return 0
+
+    if not raw_text:
+        return 0
+
+    complete_lines = 0
+    for chunk in raw_text.splitlines(keepends=True):
+        if chunk.endswith(("\n", "\r")):
+            complete_lines += 1
+    return complete_lines
+
+
+def load_state() -> dict:
     if STATE_FILE.exists():
         try:
-            return set(json.loads(STATE_FILE.read_text(encoding="utf-8")))
+            raw_state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return set()
+        else:
+            if isinstance(raw_state, dict):
+                files = raw_state.get("files")
+                if isinstance(files, dict):
+                    normalized: dict[str, dict[str, object]] = {}
+                    for raw_path, entry in files.items():
+                        if not isinstance(entry, dict):
+                            continue
+                        normalized[str(raw_path)] = {
+                            "lines": max(0, int(entry.get("lines") or 0)),
+                            "session_id": str(entry.get("session_id") or ""),
+                        }
+                    return {"version": STATE_VERSION, "files": normalized}
+
+            if isinstance(raw_state, list):
+                migrated: dict[str, dict[str, object]] = {}
+                for raw_path in raw_state:
+                    path = Path(str(raw_path))
+                    migrated[str(path)] = {
+                        "lines": _count_complete_lines(path),
+                        "session_id": "",
+                    }
+                return {"version": STATE_VERSION, "files": migrated}
+
+    return {"version": STATE_VERSION, "files": {}}
 
 
-def save_processed(processed: set) -> None:
+def save_state(state: dict) -> None:
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(
-        json.dumps(sorted(processed), indent=2), encoding="utf-8"
-    )
+    STATE_FILE.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
 # Session parsing
 # ---------------------------------------------------------------------------
 
-def parse_session(path: Path):
-    """
-    Parse a Codex session JSONL file.
-
-    Returns (session_id, usage_dict) if the session is complete and has
-    token data, or None if the session is still in progress or empty.
-    """
-    session_id = str(path)
-    last_token_usage = None
-    is_complete = False
+def parse_session_line(raw: str, session_id: str) -> tuple[str, dict | None] | None:
+    raw = raw.strip()
+    if not raw:
+        return None
 
     try:
-        with open(path, encoding="utf-8") as f:
-            for raw in f:
-                raw = raw.strip()
-                if not raw:
-                    continue
-                try:
-                    entry = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(entry, dict):
-                    continue
+        entry = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
 
-                etype = entry.get("type")
-                payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
-                ptype = payload.get("type")
+    if not isinstance(entry, dict):
+        return None
 
-                # Extract stable session id
-                if etype == "session_meta":
-                    session_id = payload.get("id") or session_id
+    etype = entry.get("type")
+    payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
+    ptype = payload.get("type")
 
-                # Track the latest cumulative token count
-                if etype == "event_msg" and ptype == "token_count":
-                    info = payload.get("info") or {}
-                    total = info.get("total_token_usage")
-                    if total:
-                        last_token_usage = total
+    if etype == "session_meta":
+        session_id = str(payload.get("id") or session_id)
+        return session_id, None
 
-                # Detect end of session
-                if etype == "event_msg" and ptype == "task_complete":
-                    is_complete = True
+    if etype == "event_msg" and ptype == "token_count":
+        info = payload.get("info") or {}
+        usage = info.get("last_token_usage") or info.get("total_token_usage")
+        if isinstance(usage, dict):
+            return session_id, usage
 
+    return session_id, None
+
+
+def read_complete_lines(path: Path) -> list[str]:
+    try:
+        raw_text = path.read_text(encoding="utf-8")
     except OSError:
-        return None
+        return []
 
-    if not is_complete or not last_token_usage:
-        return None
+    if not raw_text:
+        return []
 
-    return session_id, last_token_usage
+    complete_lines: list[str] = []
+    for chunk in raw_text.splitlines(keepends=True):
+        if chunk.endswith(("\n", "\r")):
+            complete_lines.append(chunk.rstrip("\r\n"))
+
+    return complete_lines
 
 
 # ---------------------------------------------------------------------------
@@ -141,28 +176,48 @@ def write_event(session_id: str, usage: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def scan_once() -> int:
-    processed = load_processed()
-    newly_processed: set = set()
+    state = load_state()
+    state_files = state.setdefault("files", {})
+    newly_written = 0
 
-    for root, _dirs, files in os.walk(SESSIONS_DIR):
-        for fname in files:
+    for root, _dirs, filenames in os.walk(SESSIONS_DIR):
+        for fname in filenames:
             if not fname.endswith(".jsonl"):
                 continue
             path = Path(root) / fname
             path_str = str(path)
-            if path_str in processed:
-                continue
-            result = parse_session(path)
-            if result is None:
-                continue
-            session_id, usage = result
-            write_event(session_id, usage)
-            newly_processed.add(path_str)
+            cursor = state_files.setdefault(path_str, {"lines": 0, "session_id": ""})
+            if not isinstance(cursor, dict):
+                cursor = {"lines": 0, "session_id": ""}
+                state_files[path_str] = cursor
 
-    if newly_processed:
-        save_processed(processed | newly_processed)
+            complete_lines = read_complete_lines(path)
+            line_count = len(complete_lines)
+            seen_lines = max(0, int(cursor.get("lines") or 0))
 
-    return len(newly_processed)
+            if line_count < seen_lines:
+                seen_lines = 0
+                cursor["session_id"] = ""
+
+            if line_count <= seen_lines:
+                cursor["lines"] = line_count
+                continue
+
+            session_id = str(cursor.get("session_id") or path.stem)
+            for raw in complete_lines[seen_lines:]:
+                parsed = parse_session_line(raw, session_id)
+                if parsed is None:
+                    continue
+                session_id, usage = parsed
+                cursor["session_id"] = session_id
+                if usage is not None:
+                    write_event(session_id, usage)
+                    newly_written += 1
+
+            cursor["lines"] = line_count
+
+    save_state(state)
+    return newly_written
 
 
 # ---------------------------------------------------------------------------

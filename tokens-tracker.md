@@ -72,12 +72,12 @@ Example record:
 ## Codex Session Watcher
 
 Codex does not expose a native hook system. Instead, `codex-mem.py` watches
-`~/.codex/sessions/` for completed sessions and extracts token usage automatically.
+`~/.codex/sessions/` and streams new `token_count` updates into the mem JSONL file.
 
 Codex writes a session JSONL file per run under `~/.codex/sessions/YYYY/MM/DD/`.
-Each session ends with a `task_complete` event preceded by a `token_count` event
-that carries the cumulative `total_token_usage` for the whole session. The watcher
-detects this pattern and appends one record per session to `codex.jsonl`.
+Each `token_count` event includes a `last_token_usage` block with the incremental
+usage for that update. The watcher emits those deltas as soon as they appear, so the
+dashboard can move before `task_complete` lands.
 
 ### 1. Install the watcher script
 
@@ -192,7 +192,7 @@ cat "$HOME/.mem-cli/runtime/codex-mem.log"
 ### State file
 
 Processed sessions are tracked in `~/.mem-cli/runtime/codex-processed.json`
-to avoid duplicate entries across restarts.
+as per-file line cursors so incremental updates are not duplicated across restarts.
 
 ## Local JSONL Format
 

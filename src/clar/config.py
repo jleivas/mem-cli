@@ -89,7 +89,15 @@ def iter_configured_jsonl_paths() -> list[Path]:
     return paths
 
 
+def get_codex_watcher_state_path() -> Path:
+    return get_runtime_dir() / "codex-processed.json"
+
+
 def clear_configured_jsonl_files() -> None:
     for path in iter_configured_jsonl_paths():
         if path.exists():
             path.write_text("", encoding="utf-8")
+
+    watcher_state = get_codex_watcher_state_path()
+    if watcher_state.exists():
+        watcher_state.unlink()
