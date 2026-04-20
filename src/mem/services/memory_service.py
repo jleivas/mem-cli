@@ -43,12 +43,21 @@ class MemoryService:
         *,
         cwd: str | None = None,
         query: str | None = None,
+        tag: str | None = None,
     ) -> list[Memory]:
         """Return memories for the current project, newest first.
 
         If *query* is given, only memories whose content matches are returned.
+        If *tag* is given, only memories with that tag are returned.
+        Both filters can be combined: tag is applied first, then query.
         """
         project = _resolve_project(cwd)
+        if tag:
+            memories = self._store.filter_by_tag(project, tag)
+            if query:
+                needle = query.lower()
+                memories = [m for m in memories if needle in m.content.lower()]
+            return memories
         if query:
             return self._store.search(project, query)
         return self._store.list(project)

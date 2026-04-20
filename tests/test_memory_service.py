@@ -102,6 +102,34 @@ def test_recall_does_not_leak_across_projects(tmp_path) -> None:
     assert len(svc.recall(cwd=OTHER)) == 1
 
 
+def test_recall_with_tag_filters(tmp_path) -> None:
+    svc = _svc(tmp_path)
+    svc.remember("use ruff", cwd=PROJECT, tags=["style"])
+    svc.remember("use typer", cwd=PROJECT, tags=["architecture"])
+
+    results = svc.recall(cwd=PROJECT, tag="style")
+    assert len(results) == 1
+    assert results[0].content == "use ruff"
+
+
+def test_recall_with_tag_and_query_combined(tmp_path) -> None:
+    svc = _svc(tmp_path)
+    svc.remember("use ruff for linting", cwd=PROJECT, tags=["style"])
+    svc.remember("use ruff for formatting", cwd=PROJECT, tags=["style"])
+    svc.remember("use typer", cwd=PROJECT, tags=["style"])
+
+    results = svc.recall(cwd=PROJECT, tag="style", query="ruff")
+    assert len(results) == 2
+    assert all("ruff" in m.content for m in results)
+
+
+def test_recall_tag_returns_empty_when_no_match(tmp_path) -> None:
+    svc = _svc(tmp_path)
+    svc.remember("use ruff", cwd=PROJECT, tags=["style"])
+
+    assert svc.recall(cwd=PROJECT, tag="deps") == []
+
+
 # ---------------------------------------------------------------------------
 # forget
 # ---------------------------------------------------------------------------

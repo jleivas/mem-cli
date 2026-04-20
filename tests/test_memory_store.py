@@ -157,6 +157,56 @@ def test_search_returns_newest_first(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# filter_by_tag
+# ---------------------------------------------------------------------------
+
+def test_filter_by_tag_returns_matching(tmp_path) -> None:
+    store = MemoryStore(root=tmp_path)
+    store.save(Memory("use ruff", PROJECT, tags=["style"]))
+    store.save(Memory("python 3.11+", PROJECT, tags=["deps"]))
+
+    results = store.filter_by_tag(PROJECT, "style")
+
+    assert len(results) == 1
+    assert results[0].content == "use ruff"
+
+
+def test_filter_by_tag_case_insensitive(tmp_path) -> None:
+    store = MemoryStore(root=tmp_path)
+    store.save(Memory("use ruff", PROJECT, tags=["Style"]))
+
+    assert len(store.filter_by_tag(PROJECT, "style")) == 1
+
+
+def test_filter_by_tag_returns_empty_when_no_match(tmp_path) -> None:
+    store = MemoryStore(root=tmp_path)
+    store.save(Memory("use ruff", PROJECT, tags=["style"]))
+
+    assert store.filter_by_tag(PROJECT, "deps") == []
+
+
+def test_filter_by_tag_returns_newest_first(tmp_path) -> None:
+    store = MemoryStore(root=tmp_path)
+    m1 = store.save(Memory("ruff rule A", PROJECT, tags=["style"]))
+    m2 = store.save(Memory("ruff rule B", PROJECT, tags=["style"]))
+
+    results = store.filter_by_tag(PROJECT, "style")
+
+    assert results[0].id == m2.id
+    assert results[1].id == m1.id
+
+
+def test_filter_by_tag_ignores_untagged(tmp_path) -> None:
+    store = MemoryStore(root=tmp_path)
+    store.save(Memory("no tags here", PROJECT))
+    store.save(Memory("has tag", PROJECT, tags=["style"]))
+
+    results = store.filter_by_tag(PROJECT, "style")
+
+    assert len(results) == 1
+
+
+# ---------------------------------------------------------------------------
 # list_projects
 # ---------------------------------------------------------------------------
 

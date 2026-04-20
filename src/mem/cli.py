@@ -409,15 +409,22 @@ def remember(
 
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def recall(
-    query: str = typer.Argument("", help="Optional search query."),
+    query: str = typer.Argument("", help="Optional search query (substring match on content)."),
+    tag: str = typer.Option("", "--tag", "-t", help="Filter by tag."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
 ) -> None:
     """[bold #F25C5C]List[/] memories for the current project."""
     svc = _memory_service()
-    memories = svc.recall(cwd=cwd or None, query=query or None)
+    memories = svc.recall(cwd=cwd or None, query=query or None, tag=tag or None)
 
     if not memories:
-        msg = f"No memories found{f' matching {query!r}' if query else ''}."
+        parts = []
+        if tag:
+            parts.append(f"tag [bold]{tag}[/bold]")
+        if query:
+            parts.append(f"query [bold]{query!r}[/bold]")
+        filter_desc = " and ".join(parts)
+        msg = f"No memories found{f' matching {filter_desc}' if filter_desc else ''}."
         console.print(_render_action_screen(_ActionResult(
             title="Recall",
             body=Panel.fit(msg, border_style=ACCENT_YELLOW),
@@ -425,8 +432,14 @@ def recall(
         )))
         return
 
+    title_parts = [f"Memories — {memories[0].project_name}"]
+    if tag:
+        title_parts.append(f"[dim]#{tag}[/dim]")
+    if query:
+        title_parts.append(f"[dim]\"{query}\"[/dim]")
+
     console.print(_render_action_screen(_ActionResult(
-        title=f"Memories — {memories[0].project_name}",
+        title=" ".join(title_parts),
         body=_render_memory_table(memories),
         border_style=ACCENT_PINK,
     )))

@@ -128,6 +128,12 @@ class MemoryStore:
         matches = [m for m in self._read_all(project) if needle in m.content.lower()]
         return sorted(matches, key=lambda m: m.timestamp, reverse=True)
 
+    def filter_by_tag(self, project: str, tag: str) -> list[Memory]:
+        """Return memories that have the given tag (case-insensitive), newest first."""
+        needle = tag.lower()
+        matches = [m for m in self._read_all(project) if needle in (t.lower() for t in m.tags)]
+        return sorted(matches, key=lambda m: m.timestamp, reverse=True)
+
     def list_projects(self) -> list[dict[str, Any]]:
         """Return metadata for all projects that have memories, sorted by name."""
         results: list[dict[str, Any]] = []
