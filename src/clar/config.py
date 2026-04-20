@@ -89,6 +89,16 @@ def iter_configured_jsonl_paths() -> list[Path]:
     return paths
 
 
+def get_projects_dir() -> Path:
+    return get_app_home() / "projects"
+
+
+def ensure_projects_dir() -> Path:
+    projects_dir = get_projects_dir()
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    return projects_dir
+
+
 def get_codex_watcher_state_path() -> Path:
     return get_runtime_dir() / "codex-processed.json"
 

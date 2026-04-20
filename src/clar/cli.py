@@ -17,6 +17,7 @@ from .config import get_default_claude_jsonl_path
 from .config import get_default_codex_jsonl_path
 from .config import get_runtime_state_path
 from .app import build_monitor_service
+from .services.memory_service import MemoryService
 from .services.process_registry import ProcessRegistry
 from .storage.runtime_state import RuntimeStateStore
 from .ui.dashboard import live_dashboard
@@ -343,6 +344,130 @@ def dashboard(
 def version() -> None:
     """Print the current version."""
     console.print(APP_VERSION)
+
+
+# ---------------------------------------------------------------------------
+# Memory commands
+# ---------------------------------------------------------------------------
+
+def _memory_service() -> MemoryService:
+    return MemoryService()
+
+
+def _render_memory_table(memories: list) -> Table:
+    table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
+    table.add_column("ID", style=f"bold {ACCENT_YELLOW}", no_wrap=True, width=10)
+    table.add_column("Content", style="white", ratio=3)
+    table.add_column("Tags", style=ACCENT_ORANGE, ratio=1)
+    table.add_column("Saved", style="dim", no_wrap=True)
+    for m in memories:
+        tags = ", ".join(m.tags) if m.tags else "-"
+        ts = m.timestamp.strftime("%Y-%m-%d %H:%M")
+        table.add_row(m.id, m.content, tags, ts)
+    return table
+
+
+@app.command()
+def remember(
+    content: str = typer.Argument(..., help="The memory to store."),
+    tags: list[str] = typer.Option([], "--tag", "-t", help="Optional tags (repeatable)."),
+    cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+) -> None:
+    """Store a memory for the current project."""
+    svc = _memory_service()
+    memory = svc.remember(content, cwd=cwd or None, tags=tags)
+
+    table = Table.grid(padding=(0, 1))
+    table.add_row(Text("ID", style=f"bold {ACCENT_ORANGE}"), Text(memory.id, style=ACCENT_YELLOW))
+    table.add_row(Text("Project", style=f"bold {ACCENT_ORANGE}"), Text(memory.project_name, style="white"))
+    table.add_row(Text("Content", style=f"bold {ACCENT_ORANGE}"), Text(memory.content, style="white"))
+    if memory.tags:
+        table.add_row(Text("Tags", style=f"bold {ACCENT_ORANGE}"), Text(", ".join(memory.tags), style="white"))
+
+    console.print(_render_action_screen(_ActionResult(
+        title="Memory saved",
+        body=table,
+        border_style=ACCENT_PINK,
+    )))
+
+
+@app.command()
+def recall(
+    query: str = typer.Argument("", help="Optional search query."),
+    cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+) -> None:
+    """List memories for the current project."""
+    svc = _memory_service()
+    memories = svc.recall(cwd=cwd or None, query=query or None)
+
+    if not memories:
+        msg = f"No memories found{f' matching {query!r}' if query else ''}."
+        console.print(_render_action_screen(_ActionResult(
+            title="Recall",
+            body=Panel.fit(msg, border_style=ACCENT_YELLOW),
+            border_style=ACCENT_YELLOW,
+        )))
+        return
+
+    console.print(_render_action_screen(_ActionResult(
+        title=f"Memories — {memories[0].project_name}",
+        body=_render_memory_table(memories),
+        border_style=ACCENT_PINK,
+    )))
+
+
+@app.command()
+def forget(
+    memory_id: str = typer.Argument(..., help="ID of the memory to delete."),
+    cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+) -> None:
+    """Delete a memory by ID."""
+    svc = _memory_service()
+    deleted = svc.forget(memory_id, cwd=cwd or None)
+
+    if deleted:
+        body = Panel.fit(f"Memory [bold]{memory_id}[/bold] deleted.", border_style=ACCENT_PINK)
+        console.print(_render_action_screen(_ActionResult(
+            title="Memory deleted",
+            body=body,
+            border_style=ACCENT_PINK,
+        )))
+    else:
+        body = Panel.fit(f"No memory found with ID [bold]{memory_id}[/bold].", border_style="red")
+        console.print(_render_action_screen(_ActionResult(
+            title="Not found",
+            body=body,
+            border_style="red",
+        )))
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def projects() -> None:
+    """List all projects that have stored memories."""
+    svc = _memory_service()
+    all_projects = svc.projects()
+
+    if not all_projects:
+        console.print(_render_action_screen(_ActionResult(
+            title="Projects",
+            body=Panel.fit("No projects with memories yet.", border_style=ACCENT_YELLOW),
+            border_style=ACCENT_YELLOW,
+        )))
+        return
+
+    table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
+    table.add_column("Project", style=f"bold {ACCENT_YELLOW}", ratio=2)
+    table.add_column("Path", style="dim", ratio=3)
+    table.add_column("Memories", style=ACCENT_ORANGE, justify="right", width=10)
+    for p in all_projects:
+        table.add_row(p["project_name"], p["project"], str(p["memory_count"]))
+
+    console.print(_render_action_screen(_ActionResult(
+        title="Projects",
+        body=table,
+        border_style=ACCENT_PINK,
+    )))
 
 
 def main() -> None:
