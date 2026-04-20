@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-mem = "clar.cli:main"
+mem = "mem.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -32,4 +32,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-clar = ["prompts/*.md"]
+mem = ["prompts/*.md"]

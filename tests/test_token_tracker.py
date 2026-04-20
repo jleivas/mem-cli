@@ -1,5 +1,5 @@
-from clar.models import TokenEvent
-from clar.services.token_tracker import TokenTracker
+from mem.models import TokenEvent
+from mem.services.token_tracker import TokenTracker
 
 
 def test_register_event_and_snapshot() -> None:

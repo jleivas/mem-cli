@@ -1,10 +1,10 @@
 from typer.testing import CliRunner
 
-from clar import APP_VERSION
-from clar.cli import app
-from clar.cli import _run_menu
-from clar.cli import _render_home_screen
-from clar.cli import _render_footer
+from mem import APP_VERSION
+from mem.cli import app
+from mem.cli import _run_menu
+from mem.cli import _render_home_screen
+from mem.cli import _render_footer
 from rich.console import Console
 
 
@@ -32,7 +32,7 @@ def test_start_and_stop_commands(monkeypatch) -> None:
         def load_state(self):
             return None
 
-    monkeypatch.setattr("clar.cli._registry", lambda: FakeRegistry())
+    monkeypatch.setattr("mem.cli._registry", lambda: FakeRegistry())
 
     runner = CliRunner()
     start_result = runner.invoke(app, ["start"])
@@ -53,7 +53,7 @@ def test_status_command(monkeypatch) -> None:
         def load_state(self):
             return FakeState()
 
-    monkeypatch.setattr("clar.cli._registry", lambda: FakeRegistry())
+    monkeypatch.setattr("mem.cli._registry", lambda: FakeRegistry())
 
     runner = CliRunner()
     result = runner.invoke(app, ["status"])
@@ -62,7 +62,7 @@ def test_status_command(monkeypatch) -> None:
 
 
 def test_menu_quit_returns_cleanly(monkeypatch) -> None:
-    monkeypatch.setattr("clar.cli.console.input", lambda prompt: "0")
+    monkeypatch.setattr("mem.cli.console.input", lambda prompt: "0")
 
     _run_menu()
 

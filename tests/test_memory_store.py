@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from clar.models.memory import Memory
-from clar.storage.memory_store import MemoryStore, _project_slug
+from mem.models.memory import Memory
+from mem.storage.memory_store import MemoryStore, _project_slug
 
 
 PROJECT = "/projects/mem-cli"

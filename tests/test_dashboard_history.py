@@ -1,5 +1,5 @@
-from clar.models import AgentStatus
-from clar.storage.dashboard_history import DashboardSnapshotStore
+from mem.models import AgentStatus
+from mem.storage.dashboard_history import DashboardSnapshotStore
 
 
 def test_dashboard_snapshot_store_roundtrip(tmp_path) -> None:

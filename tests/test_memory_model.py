@@ -2,7 +2,7 @@ from datetime import timezone
 
 import pytest
 
-from clar.models.memory import Memory, _project_name
+from mem.models.memory import Memory, _project_name
 
 
 # ---------------------------------------------------------------------------

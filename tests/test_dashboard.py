@@ -1,6 +1,6 @@
-from clar.models import TokenEvent
-from clar.services.token_tracker import TokenTracker
-from clar.ui.dashboard import build_detail_table, build_summary_panel, render_dashboard
+from mem.models import TokenEvent
+from mem.services.token_tracker import TokenTracker
+from mem.ui.dashboard import build_detail_table, build_summary_panel, render_dashboard
 
 
 def _snapshot():

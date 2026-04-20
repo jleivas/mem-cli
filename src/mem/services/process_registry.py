@@ -68,7 +68,7 @@ class ProcessRegistry:
         command = [
             sys.executable,
             "-c",
-            "from clar.app import run_daemon; run_daemon()",
+            "from mem.app import run_daemon; run_daemon()",
         ]
         creationflags = 0
         if os.name == "nt":

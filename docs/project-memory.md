@@ -209,7 +209,7 @@ mem init --agent claude | bash
 
 **Customizing the prompt template:**
 
-The built-in template lives at `src/clar/prompts/project_memory.md` inside the package.
+The built-in template lives at `src/mem/prompts/project_memory.md` inside the package.
 To override it for your installation, place a custom template at:
 
 ```

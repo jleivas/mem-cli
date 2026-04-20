@@ -1,8 +1,8 @@
 import pytest
 
-from clar.models.memory import Memory
-from clar.services.memory_service import MemoryService, _resolve_project
-from clar.storage.memory_store import MemoryStore
+from mem.models.memory import Memory
+from mem.services.memory_service import MemoryService, _resolve_project
+from mem.storage.memory_store import MemoryStore
 
 
 PROJECT = "/projects/mem-cli"

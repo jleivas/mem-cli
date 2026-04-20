@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from clar.config import get_runtime_state_path
-from clar.services.process_registry import ProcessRegistry
-from clar.storage.runtime_state import RuntimeState, RuntimeStateStore
-from clar.utils.time import utc_now
+from mem.config import get_runtime_state_path
+from mem.services.process_registry import ProcessRegistry
+from mem.storage.runtime_state import RuntimeState, RuntimeStateStore
+from mem.utils.time import utc_now
 
 
 def test_runtime_state_round_trip(tmp_path, monkeypatch) -> None:

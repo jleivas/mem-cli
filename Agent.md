@@ -15,7 +15,7 @@ This repository is `mem-cli` — a local CLI for token observability and agent m
 
 - Python 3.11+
 - CLI entrypoint: `mem`
-- Main package: `src/clar`
+- Main package: `src/mem`
 - Tests: `tests/`
 
 ## Token Tracking Notes

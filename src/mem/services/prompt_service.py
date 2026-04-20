@@ -48,7 +48,7 @@ def _load_template() -> str:
     if user_path.exists():
         return user_path.read_text(encoding="utf-8")
 
-    ref = importlib.resources.files("clar.prompts").joinpath(BUILTIN_PROMPT)
+    ref = importlib.resources.files("mem.prompts").joinpath(BUILTIN_PROMPT)
     return ref.read_text(encoding="utf-8")
 
 

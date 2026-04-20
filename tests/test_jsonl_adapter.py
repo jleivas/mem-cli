@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from clar.services.adapters.jsonl_adapter import JsonlTokenSource, JsonlTokenSourceConfig
+from mem.services.adapters.jsonl_adapter import JsonlTokenSource, JsonlTokenSourceConfig
 
 
 def test_jsonl_source_reads_appended_events(tmp_path) -> None:

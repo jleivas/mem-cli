@@ -1,10 +1,10 @@
 import pytest
 from typer.testing import CliRunner
 
-from clar.cli import app
-from clar.models.memory import Memory
-from clar.services.memory_service import MemoryService
-from clar.storage.memory_store import MemoryStore
+from mem.cli import app
+from mem.models.memory import Memory
+from mem.services.memory_service import MemoryService
+from mem.storage.memory_store import MemoryStore
 
 
 PROJECT = "/projects/mem-cli"
@@ -16,7 +16,7 @@ def _make_service(tmp_path):
 
 def _patch_service(monkeypatch, tmp_path):
     svc = _make_service(tmp_path)
-    monkeypatch.setattr("clar.cli._memory_service", lambda: svc)
+    monkeypatch.setattr("mem.cli._memory_service", lambda: svc)
     return svc
 
 
