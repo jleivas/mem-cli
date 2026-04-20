@@ -32,7 +32,11 @@ from .storage.runtime_state import RuntimeStateStore
 from .ui.dashboard import live_dashboard
 from .ui.dashboard import DashboardViewMode
 
-app = typer.Typer(add_completion=False, help="Mem CLI for AI agents — local token observability and memory.")
+app = typer.Typer(
+    add_completion=False,
+    rich_markup_mode="rich",
+    help="Mem CLI for AI agents — local token observability and memory.",
+)
 console = Console()
 CLI_NAME = "mem"
 ACCENT_PINK = "#E93A7D"
@@ -286,7 +290,7 @@ def _run_menu() -> None:
 
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def start() -> None:
     """Start the local monitor."""
     result = _start_monitor_action()
@@ -295,14 +299,14 @@ def start() -> None:
         raise typer.Exit(code=1)
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def stop() -> None:
     """Stop the local monitor."""
     result = _stop_monitor_action()
     console.print(_render_action_screen(result))
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def status() -> None:
     """Show monitor status."""
     result = _status_action()
@@ -332,7 +336,7 @@ def _launch_dashboard(view: str = "both") -> None:
         service.stop()
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def dashboard(
     view: str = typer.Option(
         "both",
@@ -349,7 +353,7 @@ def dashboard(
     _launch_dashboard(normalized_view)
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def version() -> None:
     """Print the current version."""
     console.print(APP_VERSION)
@@ -376,7 +380,7 @@ def _render_memory_table(memories: list) -> Table:
     return table
 
 
-@app.command()
+@app.command(rich_help_panel="Memory")
 def remember(
     content: str = typer.Argument(..., help="The memory to store."),
     tags: list[str] = typer.Option([], "--tag", "-t", help="Optional tags (repeatable)."),
@@ -400,7 +404,7 @@ def remember(
     )))
 
 
-@app.command()
+@app.command(rich_help_panel="Memory")
 def recall(
     query: str = typer.Argument("", help="Optional search query."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
@@ -425,7 +429,7 @@ def recall(
     )))
 
 
-@app.command()
+@app.command(rich_help_panel="Memory")
 def forget(
     memory_id: str = typer.Argument(..., help="ID of the memory to delete."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
@@ -451,7 +455,7 @@ def forget(
         raise typer.Exit(code=1)
 
 
-@app.command()
+@app.command(rich_help_panel="Memory")
 def projects() -> None:
     """List all projects that have stored memories."""
     svc = _memory_service()
@@ -479,7 +483,7 @@ def projects() -> None:
     )))
 
 
-@app.command()
+@app.command(rich_help_panel="Memory")
 def init(
     agent: str = typer.Option(
         "",
@@ -709,6 +713,13 @@ def init(
             border_style="red",
         ))
         raise typer.Exit(code=result.exit_code)
+
+
+@app.command(rich_help_panel="Other")
+def help() -> None:  # noqa: A001
+    """Show all available commands."""
+    import subprocess, sys
+    subprocess.run([sys.argv[0], "--help"])
 
 
 def main() -> None:
