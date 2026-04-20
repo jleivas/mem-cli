@@ -18,6 +18,15 @@ from .config import get_default_codex_jsonl_path
 from .config import get_runtime_state_path
 from .app import build_monitor_service
 from .services.memory_service import MemoryService
+from .services.prompt_service import (
+    AgentResult,
+    build_prompt,
+    run_agent,
+    parse_remember,
+    detect_available_agents,
+    AGENT_COMMANDS,
+    AGENT_INSTALL_HINTS,
+)
 from .services.process_registry import ProcessRegistry
 from .storage.runtime_state import RuntimeStateStore
 from .ui.dashboard import live_dashboard
@@ -468,6 +477,238 @@ def projects() -> None:
         body=table,
         border_style=ACCENT_PINK,
     )))
+
+
+@app.command()
+def init(
+    agent: str = typer.Option(
+        "",
+        "--agent",
+        "-a",
+        help="Agent to use: 'claude' or 'codex'. Omit to pick interactively.",
+    ),
+    cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+) -> None:
+    """Initialize memories for the current project using an AI agent.
+
+    The agent analyzes the project and generates mem remember commands organized
+    by category. If the project already has memories you will be asked to confirm
+    before replacing them.
+
+    \b
+    Examples:
+      mem init                   # detect agents, pick interactively
+      mem init --agent claude    # use Claude Code directly
+      mem init --agent codex     # use Codex directly
+    """
+    from .services.memory_service import MemoryService
+    from .storage.memory_store import MemoryStore
+
+    resolved_cwd = cwd or None
+
+    # ------------------------------------------------------------------ #
+    # 1. Detect installed agents                                          #
+    # ------------------------------------------------------------------ #
+    available = detect_available_agents()
+
+    if not available:
+        hints = "\n".join(
+            f"  {name}: {hint}" for name, hint in AGENT_INSTALL_HINTS.items()
+        )
+        console.print(_render_action_screen(_ActionResult(
+            title="No agent found",
+            body=Panel.fit(
+                Text.assemble(
+                    ("No supported agent is installed.\n\n", "white"),
+                    ("Install one of:\n", "dim"),
+                    (hints, f"bold {ACCENT_YELLOW}"),
+                ),
+                border_style="red",
+            ),
+            border_style="red",
+        )))
+        raise typer.Exit(code=1)
+
+    # ------------------------------------------------------------------ #
+    # 2. Resolve which agent to use                                       #
+    # ------------------------------------------------------------------ #
+    chosen = agent.lower() if agent else ""
+
+    if chosen and chosen not in AGENT_COMMANDS:
+        agents = ", ".join(f"'{a}'" for a in AGENT_COMMANDS)
+        console.print(Panel.fit(
+            f"Unknown agent {chosen!r}. Choose one of: {agents}.",
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    if chosen and chosen not in available:
+        console.print(Panel.fit(
+            Text.assemble(
+                (f"Agent '{chosen}' is not installed.\n", "white"),
+                (f"Install it with: {AGENT_INSTALL_HINTS.get(chosen, '')}", f"bold {ACCENT_YELLOW}"),
+            ),
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    if not chosen:
+        if len(available) == 1:
+            chosen = available[0]
+        else:
+            # Interactive picker
+            console.print()
+            console.print(Text("Available agents:", style=f"bold {ACCENT_ORANGE}"))
+            for i, name in enumerate(available, 1):
+                console.print(f"  [{i}] {name}")
+            console.print()
+            while True:
+                try:
+                    raw = console.input(f"[bold {ACCENT_YELLOW}]Select agent (1-{len(available)}): [/]").strip()
+                except (EOFError, KeyboardInterrupt):
+                    raise typer.Exit(code=0)
+                if raw.isdigit() and 1 <= int(raw) <= len(available):
+                    chosen = available[int(raw) - 1]
+                    break
+                console.print("  Invalid choice, try again.", style="red")
+
+    # ------------------------------------------------------------------ #
+    # 3. Check if project already has memories                            #
+    # ------------------------------------------------------------------ #
+    svc = MemoryService()
+    existing = svc.recall(cwd=resolved_cwd)
+
+    if existing:
+        project_name = existing[0].project_name
+        console.print()
+        console.print(Panel.fit(
+            Text.assemble(
+                ("Project ", "white"),
+                (project_name, f"bold {ACCENT_YELLOW}"),
+                (f" already has {len(existing)} memory(s).\n", "white"),
+                ("This will delete all existing memories and regenerate them.", "dim"),
+            ),
+            border_style=ACCENT_ORANGE,
+            title=Text("Project exists", style=f"bold {ACCENT_ORANGE}"),
+        ))
+        console.print()
+        try:
+            confirm = console.input(
+                f"[bold {ACCENT_YELLOW}]Replace all memories? (y/N): [/]"
+            ).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            confirm = ""
+
+        if confirm != "y":
+            console.print(Text("  Cancelled.", style="dim"))
+            raise typer.Exit(code=0)
+
+        # Delete all existing memories for this project
+        for m in existing:
+            svc.forget(m.id, cwd=resolved_cwd)
+
+    # ------------------------------------------------------------------ #
+    # 4. Run the agent with live UI                                       #
+    # ------------------------------------------------------------------ #
+    from rich.live import Live
+    from rich.spinner import Spinner
+
+    filled = build_prompt(cwd=resolved_cwd)
+    saved: list[tuple[str, str]] = []   # (content, tag)
+    last_line: list[str] = [""]         # mutable cell for current output line
+    is_running: list[bool] = [True]
+
+    def _make_live() -> Group:
+        items: list = []
+
+        # Spinner row
+        spinner_text = Text.assemble(
+            (" Generating with ", "dim"),
+            (chosen, f"bold {ACCENT_YELLOW}"),
+            ("…", "dim"),
+        )
+        items.append(Spinner("dots", text=spinner_text) if is_running[0]
+                     else Text(""))
+
+        # Latest raw line from the agent (dim, truncated)
+        raw = last_line[0]
+        if raw:
+            preview = raw if len(raw) <= 80 else raw[:77] + "…"
+            items.append(Text(f"  {preview}", style="dim"))
+
+        # Saved memories so far
+        if saved:
+            t = Table.grid(padding=(0, 1))
+            for content, tag in saved:
+                label = f"[{tag}]" if tag else ""
+                t.add_row(
+                    Text("  ✓", style=f"bold {ACCENT_PINK}"),
+                    Text(label, style=ACCENT_ORANGE),
+                    Text(content, style="white"),
+                )
+            items.append(t)
+
+        return Group(*items)
+
+    def _on_line(line: str) -> None:
+        parsed = parse_remember(line)
+        if parsed:
+            content, tag = parsed
+            svc.remember(content, cwd=resolved_cwd, tags=[tag] if tag else [])
+            saved.append((content, tag))
+            last_line[0] = ""
+        else:
+            # Show raw agent output as a progress hint, skip markdown fences
+            if not line.startswith("```"):
+                last_line[0] = line
+
+    console.print()
+    with Live(_make_live(), console=console, refresh_per_second=12) as live:
+        result = run_agent(filled, chosen, on_line=lambda ln: (
+            _on_line(ln),
+            live.update(_make_live()),
+        ))
+        is_running[0] = False
+        last_line[0] = ""
+        live.update(_make_live())
+
+    console.print()
+
+    if result.ok or (result.partial and saved):
+        # Show summary
+        summary_table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
+        summary_table.add_column("Tag", style=ACCENT_ORANGE, no_wrap=True)
+        summary_table.add_column("Memory", style="white")
+        for content, tag in saved:
+            summary_table.add_row(tag or "-", content)
+
+        console.print(_render_action_screen(_ActionResult(
+            title=f"{len(saved)} memor{'y' if len(saved) == 1 else 'ies'} saved",
+            body=summary_table if saved else Panel.fit("No memories were generated.", border_style=ACCENT_YELLOW),
+            border_style=ACCENT_PINK if saved else ACCENT_YELLOW,
+        )))
+
+        if result.partial:
+            console.print(Panel.fit(
+                Text.assemble(
+                    ("The agent exited early — some memories may be missing.\n", "white"),
+                    (f"Cause: {result.stderr}", "red") if result.stderr else ("", ""),
+                ),
+                border_style=ACCENT_ORANGE,
+                title=Text("Partial completion", style=f"bold {ACCENT_ORANGE}"),
+            ))
+            raise typer.Exit(code=result.exit_code)
+    else:
+        body = Text.assemble(
+            ("The task did not complete — the agent failed before saving any memory.\n", "white"),
+            *([("\nCause:\n", "dim"), (result.stderr, "red")] if result.stderr else []),
+        )
+        console.print(Panel(
+            body,
+            title=Text("Task failed", style="bold red"),
+            border_style="red",
+        ))
+        raise typer.Exit(code=result.exit_code)
 
 
 def main() -> None:

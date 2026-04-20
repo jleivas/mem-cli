@@ -138,6 +138,88 @@ Each line in `memories.jsonl` is a self-contained JSON object:
 | `timestamp` | ISO 8601 | UTC timestamp of when the memory was saved |
 | `tags` | string[] | optional labels |
 
+---
+
+### `mem init`
+
+Initialize memories for the current project using an AI agent. The agent analyzes
+the project files and outputs `mem remember` commands organized by category.
+
+```bash
+mem init                   # detect installed agents, pick interactively if more than one
+mem init --agent claude    # use Claude Code directly
+mem init --agent codex     # use Codex directly
+```
+
+**Agent detection:**
+
+`mem init` checks which agents are installed in PATH. If none are found, it shows
+installation instructions. If more than one is available and `--agent` is not specified,
+it presents an interactive picker.
+
+Supported agents:
+
+| Agent | Install |
+|---|---|
+| `claude` | `npm install -g @anthropic-ai/claude-code` |
+| `codex` | `npm install -g @openai/codex` |
+
+**Existing project guard:**
+
+If the project already has stored memories, `mem init` warns before proceeding:
+
+```
+Project my-project already has 12 memory(s).
+This will delete all existing memories and regenerate them.
+
+Replace all memories? (y/N):
+```
+
+Answering `y` deletes all existing memories and runs the agent. Anything else cancels
+with exit code 0.
+
+**Categories the agent covers:**
+
+| Tag | What the agent captures |
+|---|---|
+| `project_overview` | Purpose, goals, and main audience |
+| `architecture` | Tech stack, frameworks, folder structure, key modules |
+| `decisions` | Explicit choices made, trade-offs, constraints |
+| `env_setup` | Install steps, environment variables, how to run locally |
+| `bugs_and_fixes` | Known issues, workarounds, recurring problems |
+| `commands` | Important CLI commands, scripts, shortcuts |
+| `current_status` | What works, what is in progress, what is incomplete |
+| `next_steps` | Open tasks, TODOs, planned features |
+
+**Example output from the agent:**
+
+```
+mem remember "local CLI for token observability and agent memory" --tag project_overview
+mem remember "Python 3.11+, Typer for CLI, Rich for terminal UI" --tag architecture
+mem remember "no database — all storage is local JSONL files" --tag decisions
+mem remember "install with: pip install -e . inside the repo" --tag env_setup
+mem remember "run tests: .venv/bin/python3 -m pytest tests/ -v" --tag commands
+```
+
+Review the commands before running them. If they look correct, pipe to bash:
+
+```bash
+mem init --agent claude | bash
+```
+
+**Customizing the prompt template:**
+
+The built-in template lives at `src/clar/prompts/project_memory.md` inside the package.
+To override it for your installation, place a custom template at:
+
+```
+~/.mem-cli/prompts/project-memory.md
+```
+
+The user file takes precedence over the built-in one. Available placeholders:
+- `{cwd}` — absolute path of the current project
+- `{project_name}` — last component of the project path
+
 ## Roadmap
 
 Project memory is MVP 3 in the [roadmap](roadmap.md). The next planned stages are:
