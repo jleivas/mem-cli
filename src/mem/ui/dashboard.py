@@ -29,20 +29,23 @@ class DashboardOptions:
 DashboardViewMode = Literal["summary", "detail", "both"]
 
 ACCENT_PINK = "#E93A7D"
+ACCENT_CORAL = "#F25C5C"
 ACCENT_ORANGE = "#F98C2B"
 ACCENT_YELLOW = "#F7B500"
 
+# (key, title, description, accent_color)
 DASHBOARD_ACTIONS = (
-    ("1", "Run realtime dashboard", "Resume live token tracking in realtime."),
-    ("2", "Save snapshot", "Save the current paused dashboard to local history."),
-    ("3", "Open history", "Browse saved snapshots and load one back into the dashboard."),
-    ("4", "Reset live data", "Clear the tracker and truncate the watched JSONL files."),
-    ("0", "Exit dashboard", "Return to the main CLI menu."),
+    ("1", "Run realtime dashboard", "Resume live token tracking in realtime.", ACCENT_PINK),
+    ("2", "Save snapshot", "Save the current paused dashboard to local history.", ACCENT_CORAL),
+    ("3", "Open history", "Browse saved snapshots and load one back into the dashboard.", ACCENT_ORANGE),
+    ("4", "Reset live data", "Clear the tracker and truncate the watched JSONL files.", ACCENT_YELLOW),
+    ("0", "Exit dashboard", "Return to the main CLI menu.", ACCENT_YELLOW),
 )
 
+# (key, title, description, accent_color)
 HISTORY_RECORD_ACTIONS = (
-    ("1", "Delete record", "Remove this snapshot from local history."),
-    ("0", "Back to history", "Return to the snapshot list."),
+    ("1", "Delete record", "Remove this snapshot from local history.", ACCENT_CORAL),
+    ("0", "Back to history", "Return to the snapshot list.", ACCENT_YELLOW),
 )
 
 
@@ -91,7 +94,7 @@ def build_summary_panel(snapshot: Iterable[AgentStatus], running: bool) -> Panel
 def build_detail_table(snapshot: Iterable[AgentStatus]) -> Table:
     table = Table(title="Agent Token Usage", expand=True, show_lines=False)
     table.add_column("Agent", style=ACCENT_PINK, no_wrap=True)
-    table.add_column("Input", justify="right", style=ACCENT_ORANGE)
+    table.add_column("Input", justify="right", style=ACCENT_CORAL)
     table.add_column("Output", justify="right", style=ACCENT_ORANGE)
     table.add_column("Total", justify="right", style=ACCENT_YELLOW)
     table.add_column("Avg/record", justify="right", style=ACCENT_YELLOW)
@@ -124,16 +127,15 @@ def _build_footer_actions() -> Table:
         table.add_column(ratio=1)
 
     cells = []
-    for key, title, description in DASHBOARD_ACTIONS:
-        key_style = f"bold {ACCENT_YELLOW}" if key == "0" else f"bold {ACCENT_ORANGE}"
+    for key, title, description, accent in DASHBOARD_ACTIONS:
         cells.append(
             Panel(
                 Group(
-                    Align.center(Text(key, style=key_style)),
+                    Align.center(Text(key, style=f"bold {accent}")),
                     Align.center(Text(title, style="bold white")),
                     Align.center(Text(description, style="dim")),
                 ),
-                border_style=ACCENT_ORANGE if key != "0" else ACCENT_YELLOW,
+                border_style=accent,
                 box=ROUNDED,
                 padding=(0, 1),
             )
@@ -149,16 +151,15 @@ def _build_history_record_actions() -> Table:
         table.add_column(ratio=1)
 
     cells = []
-    for key, title, description in HISTORY_RECORD_ACTIONS:
-        key_style = f"bold {ACCENT_YELLOW}" if key == "0" else f"bold {ACCENT_ORANGE}"
+    for key, title, description, accent in HISTORY_RECORD_ACTIONS:
         cells.append(
             Panel(
                 Group(
-                    Align.center(Text(key, style=key_style)),
+                    Align.center(Text(key, style=f"bold {accent}")),
                     Align.center(Text(title, style="bold white")),
                     Align.center(Text(description, style="dim")),
                 ),
-                border_style=ACCENT_ORANGE if key != "0" else ACCENT_YELLOW,
+                border_style=accent,
                 box=ROUNDED,
                 padding=(0, 1),
             )
@@ -215,7 +216,10 @@ def _normalize_choice(raw: str) -> str:
     return aliases.get(value, value)
 
 
-def _prompt_for_choice(console: Console, allowed: set[str], prompt: str = "[bold #F7B500]>[/bold #F7B500] ") -> str:
+_PROMPT = f"[bold {ACCENT_YELLOW}]›[/bold {ACCENT_YELLOW}] "
+
+
+def _prompt_for_choice(console: Console, allowed: set[str], prompt: str = _PROMPT) -> str:
     while True:
         try:
             choice = _normalize_choice(console.input(prompt))
@@ -281,7 +285,9 @@ def _render_body(snapshot: Iterable[AgentStatus], running: bool, view: Dashboard
     summary_panel = build_summary_panel(snapshot, running)
     detail_table = build_detail_table(snapshot)
     header = Text()
-    header.append("mem", style=f"bold {ACCENT_PINK}")
+    header.append("m", style=f"bold {ACCENT_PINK}")
+    header.append("e", style=f"bold {ACCENT_CORAL}")
+    header.append("m", style=f"bold {ACCENT_ORANGE}")
     header.append("\n")
     header.append(f"Service: {'running' if running else 'stopped'}", style="green" if running else "yellow")
 
@@ -391,7 +397,7 @@ def live_dashboard(
                     show_actions=True,
                 )
             )
-            choice = _prompt_for_choice(console, {"1", "2", "3", "4", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
+            choice = _prompt_for_choice(console, {"1", "2", "3", "4", "0"}, prompt=_PROMPT)
 
             if choice == "1":
                 footer_message = "Press Ctrl+C to pause and show the menu."
@@ -424,7 +430,7 @@ def live_dashboard(
                 footer_message = "History record loaded."
         else:
             console.print(Group(_render_history_record(pinned_snapshot or [], pinned_history_path), _build_history_record_footer_panel()))
-            choice = _prompt_for_choice(console, {"1", "0"}, prompt="[bold #F7B500]>[/bold #F7B500] ")
+            choice = _prompt_for_choice(console, {"1", "0"}, prompt=_PROMPT)
             if choice == "1" and pinned_history_path is not None:
                 store.delete(pinned_history_path)
                 pinned_history_path = None

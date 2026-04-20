@@ -35,19 +35,21 @@ from .ui.dashboard import DashboardViewMode
 app = typer.Typer(
     add_completion=False,
     rich_markup_mode="rich",
-    help="Mem CLI for AI agents — local token observability and memory.",
+    help="[bold #E93A7D]Mem CLI[/] for AI agents — [dim]local token observability & memory.[/dim]",
 )
 console = Console()
 CLI_NAME = "mem"
 ACCENT_PINK = "#E93A7D"
+ACCENT_CORAL = "#F25C5C"
 ACCENT_ORANGE = "#F98C2B"
 ACCENT_YELLOW = "#F7B500"
+# (key, title, description, accent_color)
 MENU_ITEMS = (
-    ("1", "Start monitor", "Launch the background watcher."),
-    ("2", "Stop monitor", "Shut down the watcher cleanly."),
-    ("3", "Dashboard", "Open the live usage screen."),
-    ("4", "Status", "Inspect the runtime state."),
-    ("0", "Quit", "Close the interactive menu."),
+    ("1", "Start monitor", "Launch the background watcher.", ACCENT_PINK),
+    ("2", "Stop monitor", "Shut down the watcher cleanly.", ACCENT_CORAL),
+    ("3", "Dashboard", "Open the live usage screen.", ACCENT_ORANGE),
+    ("4", "Status", "Inspect the runtime state.", ACCENT_YELLOW),
+    ("0", "Quit", "Close the interactive menu.", ACCENT_YELLOW),
 )
 
 
@@ -74,8 +76,10 @@ def _registry() -> ProcessRegistry:
 
 def _build_brand_line() -> Text:
     t = Text()
-    t.append("mem", style=f"bold {ACCENT_PINK}")
-    t.append(f"  v{APP_VERSION}", style=ACCENT_YELLOW)
+    t.append("m", style=f"bold {ACCENT_PINK}")
+    t.append("e", style=f"bold {ACCENT_CORAL}")
+    t.append("m", style=f"bold {ACCENT_ORANGE}")
+    t.append(f"  v{APP_VERSION}", style=f"bold {ACCENT_YELLOW}")
     t.append("  ·  ", style="dim")
     t.append("Token observability & agent memory", style="dim white")
     return t
@@ -87,17 +91,16 @@ def _build_menu_options() -> Table:
         table.add_column()
 
     cells = []
-    for key, title, _ in MENU_ITEMS:
+    for key, title, _, accent in MENU_ITEMS:
         is_quit = key == "0"
-        key_style = f"bold {ACCENT_YELLOW}" if is_quit else f"bold {ACCENT_ORANGE}"
-        title_style = f"bold {ACCENT_PINK}" if key in {"1", "3"} else ("dim white" if is_quit else "white")
+        title_style = f"bold {accent}" if not is_quit else "dim white"
         label = Text()
-        label.append(f" {key} ", style=f"reverse {key_style}")
+        label.append(f" {key} ", style=f"reverse bold {accent}")
         label.append(f" {title}", style=title_style)
         cells.append(Panel(
             Align.center(label),
             box=ROUNDED,
-            border_style=ACCENT_YELLOW if is_quit else ACCENT_ORANGE,
+            border_style=accent,
             padding=(0, 0),
         ))
 
@@ -108,13 +111,13 @@ def _build_menu_options() -> Table:
 
 def _render_footer(message: str = "Use the number keys to navigate.") -> Panel:
     line = Text()
-    line.append("1", style=f"bold {ACCENT_ORANGE}")
+    line.append("1", style=f"bold {ACCENT_PINK}")
     line.append(" Start  ")
-    line.append("2", style=f"bold {ACCENT_ORANGE}")
+    line.append("2", style=f"bold {ACCENT_CORAL}")
     line.append(" Stop  ")
     line.append("3", style=f"bold {ACCENT_ORANGE}")
     line.append(" Dashboard  ")
-    line.append("4", style=f"bold {ACCENT_ORANGE}")
+    line.append("4", style=f"bold {ACCENT_YELLOW}")
     line.append(" Status  ")
     line.append("0", style=f"bold {ACCENT_YELLOW}")
     line.append(" Quit")
@@ -226,8 +229,8 @@ def _stop_monitor_action() -> _ActionResult:
 
     table = Table.grid(padding=(0, 1))
     table.add_row(Text("Stopped", style=f"bold {ACCENT_YELLOW}"), Text("monitor halted", style="green"))
-    table.add_row(Text("PID", style=f"bold {ACCENT_ORANGE}"), Text(str(state.pid), style="white"))
-    return _ActionResult(title="Monitor stopped", body=table, border_style=ACCENT_ORANGE)
+    table.add_row(Text("PID", style=f"bold {ACCENT_CORAL}"), Text(str(state.pid), style="white"))
+    return _ActionResult(title="Monitor stopped", body=table, border_style=ACCENT_CORAL)
 
 
 def _status_action() -> _ActionResult:
@@ -290,25 +293,25 @@ def _run_menu() -> None:
 
 
 
-@app.command(rich_help_panel="Monitor")
+@app.command(rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]")
 def start() -> None:
-    """Start the local monitor."""
+    """[bold #E93A7D]Start[/] the local monitor."""
     result = _start_monitor_action()
     console.print(_render_action_screen(result))
     if result.border_style == "red":
         raise typer.Exit(code=1)
 
 
-@app.command(rich_help_panel="Monitor")
+@app.command(rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]")
 def stop() -> None:
-    """Stop the local monitor."""
+    """[bold #F25C5C]Stop[/] the local monitor."""
     result = _stop_monitor_action()
     console.print(_render_action_screen(result))
 
 
-@app.command(rich_help_panel="Monitor")
+@app.command(rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]")
 def status() -> None:
-    """Show monitor status."""
+    """Show monitor [bold #F7B500]status[/]."""
     result = _status_action()
     console.print(_render_action_screen(result))
 
@@ -336,7 +339,7 @@ def _launch_dashboard(view: str = "both") -> None:
         service.stop()
 
 
-@app.command(rich_help_panel="Monitor")
+@app.command(rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]")
 def dashboard(
     view: str = typer.Option(
         "both",
@@ -346,16 +349,16 @@ def dashboard(
         case_sensitive=False,
     ),
 ) -> None:
-    """Open a live token dashboard in the terminal."""
+    """Open a [bold #F98C2B]live token dashboard[/] in the terminal."""
     normalized_view = view.lower()
     if normalized_view not in {"summary", "detail", "both"}:
         raise typer.BadParameter("view must be one of: summary, detail, both")
     _launch_dashboard(normalized_view)
 
 
-@app.command(rich_help_panel="Monitor")
+@app.command(rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]")
 def version() -> None:
-    """Print the current version."""
+    """Print the current [bold #F7B500]version[/]."""
     console.print(APP_VERSION)
 
 
@@ -371,7 +374,7 @@ def _render_memory_table(memories: list) -> Table:
     table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
     table.add_column("ID", style=f"bold {ACCENT_YELLOW}", no_wrap=True, width=10)
     table.add_column("Content", style="white", ratio=3)
-    table.add_column("Tags", style=ACCENT_ORANGE, ratio=1)
+    table.add_column("Tags", style=ACCENT_CORAL, ratio=1)
     table.add_column("Saved", style="dim", no_wrap=True)
     for m in memories:
         tags = ", ".join(m.tags) if m.tags else "-"
@@ -380,13 +383,13 @@ def _render_memory_table(memories: list) -> Table:
     return table
 
 
-@app.command(rich_help_panel="Memory")
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def remember(
     content: str = typer.Argument(..., help="The memory to store."),
     tags: list[str] = typer.Option([], "--tag", "-t", help="Optional tags (repeatable)."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
 ) -> None:
-    """Store a memory for the current project."""
+    """[bold #E93A7D]Store[/] a [bold #F98C2B]memory[/] for the current project."""
     svc = _memory_service()
     memory = svc.remember(content, cwd=cwd or None, tags=tags)
 
@@ -404,12 +407,12 @@ def remember(
     )))
 
 
-@app.command(rich_help_panel="Memory")
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def recall(
     query: str = typer.Argument("", help="Optional search query."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
 ) -> None:
-    """List memories for the current project."""
+    """[bold #F25C5C]List[/] memories for the current project."""
     svc = _memory_service()
     memories = svc.recall(cwd=cwd or None, query=query or None)
 
@@ -429,12 +432,12 @@ def recall(
     )))
 
 
-@app.command(rich_help_panel="Memory")
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def forget(
     memory_id: str = typer.Argument(..., help="ID of the memory to delete."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
 ) -> None:
-    """Delete a memory by ID."""
+    """[bold #F25C5C]Delete[/] a memory by ID."""
     svc = _memory_service()
     deleted = svc.forget(memory_id, cwd=cwd or None)
 
@@ -455,9 +458,9 @@ def forget(
         raise typer.Exit(code=1)
 
 
-@app.command(rich_help_panel="Memory")
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def projects() -> None:
-    """List all projects that have stored memories."""
+    """List all [bold #F98C2B]projects[/] that have stored memories."""
     svc = _memory_service()
     all_projects = svc.projects()
 
@@ -483,7 +486,7 @@ def projects() -> None:
     )))
 
 
-@app.command(rich_help_panel="Memory")
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def init(
     agent: str = typer.Option(
         "",
@@ -493,7 +496,7 @@ def init(
     ),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
 ) -> None:
-    """Initialize memories for the current project using an AI agent.
+    """[bold #E93A7D]Initialize[/] memories for the current project using an [bold #F98C2B]AI agent[/].
 
     The agent analyzes the project and generates mem remember commands organized
     by category. If the project already has memories you will be asked to confirm
@@ -715,9 +718,9 @@ def init(
         raise typer.Exit(code=result.exit_code)
 
 
-@app.command(rich_help_panel="Other")
+@app.command(rich_help_panel=f"[bold {ACCENT_YELLOW}]Other[/]")
 def help() -> None:  # noqa: A001
-    """Show all available commands."""
+    """Show all [bold #F7B500]available commands[/]."""
     import subprocess, sys
     subprocess.run([sys.argv[0], "--help"])
 
