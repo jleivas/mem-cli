@@ -13,7 +13,10 @@ If the variables are not set, `mem` falls back to its local defaults under the a
 
 ## Claude Code Hook
 
-Claude Code can write one JSONL record at the end of each session using a `Stop` hook.
+Claude Code writes one JSONL record at the end of each session using a `Stop` hook.
+The hook receives a payload with `session_id` and `transcript_path`; the script reads
+the session transcript to extract token usage from the `assistant` entries (interactive
+sessions) or the `result` entry (non-interactive `-p` invocations).
 
 ### 1. Install the hook script
 
@@ -66,41 +69,130 @@ Example record:
 {"agent_name":"claude","input_tokens":312,"output_tokens":87,"timestamp":"2026-04-17T14:00:00+00:00","source":"claude-code-hook"}
 ```
 
-## Codex Wrapper
+## Codex Session Watcher
 
-Codex does not expose a native hook system, so the recommended setup is a shell wrapper that tees `codex exec --json` output into the tracked JSONL file.
+Codex does not expose a native hook system. Instead, `codex-mem.py` watches
+`~/.codex/sessions/` for completed sessions and extracts token usage automatically.
 
-### 1. Set the output path
+Codex writes a session JSONL file per run under `~/.codex/sessions/YYYY/MM/DD/`.
+Each session ends with a `task_complete` event preceded by a `token_count` event
+that carries the cumulative `total_token_usage` for the whole session. The watcher
+detects this pattern and appends one record per session to `codex.jsonl`.
+
+### 1. Install the watcher script
+
+```bash
+mkdir -p "$HOME/.mem-cli/hooks"
+cp hooks/codex-mem.py "$HOME/.mem-cli/hooks/codex-mem.py"
+chmod +x "$HOME/.mem-cli/hooks/codex-mem.py"
+```
+
+### 2. Set the output path
 
 ```bash
 export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
 ```
 
-### 2. Add the wrapper
+### 3. Register as a launchd agent (macOS)
 
-Add this function to your shell profile:
+Create `~/Library/LaunchAgents/com.mem-cli.codex-watch.plist`:
 
-```bash
-codex-track() {
-  mkdir -p "$(dirname "${MEM_CODEX_JSONL:-$HOME/.mem-cli/codex.jsonl}")"
-  command codex exec --json "$@" \
-    | tee -a "${MEM_CODEX_JSONL:-$HOME/.mem-cli/codex.jsonl}"
-}
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mem-cli.codex-watch</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/python3</string>
+    <string>/Users/YOUR_USER/.mem-cli/hooks/codex-mem.py</string>
+    <string>--watch</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USER/.mem-cli/runtime/codex-mem.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USER/.mem-cli/runtime/codex-mem.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MEM_CODEX_JSONL</key>
+    <string>/Users/YOUR_USER/.mem-cli/codex.jsonl</string>
+    <key>MEM_CODEX_POLL</key>
+    <string>30</string>
+  </dict>
+</dict>
+</plist>
 ```
 
-### 3. Use it for tracked requests
+Replace `YOUR_USER` with your macOS username, then load the agent (`load`/`unload` are
+deprecated on modern macOS — use `bootstrap`/`bootout` instead):
 
 ```bash
-codex-track "what does this project do?"
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.mem-cli.codex-watch.plist
+```
+
+To stop or restart:
+
+```bash
+launchctl bootout   gui/$(id -u)/com.mem-cli.codex-watch
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.mem-cli.codex-watch.plist
+```
+
+To check status:
+
+```bash
+launchctl print gui/$(id -u)/com.mem-cli.codex-watch
 ```
 
 ### 4. Verify
 
-Inspect the file after a run:
+Run a one-shot scan to process any existing sessions immediately:
 
 ```bash
-tail -5 "${MEM_CODEX_JSONL:-$HOME/.mem-cli/codex.jsonl}"
+python3 "$HOME/.mem-cli/hooks/codex-mem.py" --run
 ```
+
+Then inspect the file:
+
+```bash
+tail -5 "$HOME/.mem-cli/codex.jsonl"
+```
+
+Example record:
+
+```jsonl
+{"agent_name":"codex","input_tokens":11476,"output_tokens":412,"timestamp":"2026-04-17T18:31:40+00:00","source":"codex-session-watch","session_id":"019d9cb6-6af5-7881-b00b-6563bc1fd26a","cache_read_input_tokens":10112,"reasoning_output_tokens":49}
+```
+
+Check the watcher log:
+
+```bash
+cat "$HOME/.mem-cli/runtime/codex-mem.log"
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `MEM_CODEX_JSONL` | `~/.mem-cli/codex.jsonl` | Output JSONL path |
+| `MEM_CODEX_POLL` | `30` | Poll interval in seconds |
+
+### State file
+
+Processed sessions are tracked in `~/.mem-cli/runtime/codex-processed.json`
+to avoid duplicate entries across restarts.
 
 ## Local JSONL Format
 
