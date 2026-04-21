@@ -736,6 +736,8 @@ def init(
                     break
                 console.print("  Invalid choice, try again.", style="red")
 
+    _run_config_preflight(chosen, cwd=resolved_cwd)
+
     # ------------------------------------------------------------------ #
     # 3. Check if project already has memories                            #
     # ------------------------------------------------------------------ #
@@ -1048,6 +1050,10 @@ def _append_or_replace_mcp_block(content: str) -> str:
     return text + "\n\n" + block + "\n"
 
 
+def _run_config_preflight(agent: str, cwd: str | None = None) -> None:
+    config(agent=agent or "all", cwd=cwd or "")
+
+
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def config(
     agent: str = typer.Option(
@@ -1056,12 +1062,6 @@ def config(
         "-a",
         help="Agent to use when generating AGENTS.md: 'claude', 'codex', or 'all'.",
         case_sensitive=False,
-    ),
-    glob: bool = typer.Option(  # noqa: A002
-        False,
-        "--global",
-        "-g",
-        help="Write the synced files under ~/.claude instead of the project directory.",
     ),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
 ) -> None:
@@ -1077,7 +1077,6 @@ def config(
       mem config               # generate AGENTS.md and symlink CLAUDE.md
       mem config --agent claude
       mem config --agent codex
-      mem config --global      # write under ~/.claude instead of the project dir
     """
     resolved_cwd = Path(cwd).resolve() if cwd else Path.cwd()
     agent_lower = agent.lower()
@@ -1147,7 +1146,7 @@ def config(
         ))
         raise typer.Exit(code=1)
 
-    base_dir = Path.home() / ".claude" if glob else resolved_cwd
+    base_dir = resolved_cwd
     agents_path = base_dir / "AGENTS.md"
     claude_path = base_dir / "CLAUDE.md"
     existing_agents = agents_path.read_text(encoding="utf-8") if agents_path.exists() else ""

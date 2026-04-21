@@ -85,3 +85,56 @@ def test_footer_renders_hotkeys() -> None:
     assert "Start" in output
     assert "Dashboard" in output
     assert "Quit" in output
+
+
+def test_init_runs_config_before_agent_work(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+
+    def fake_config(agent: str, cwd: str = "") -> None:
+        calls.append(f"config:{agent}:{cwd}")
+
+    def fake_run_agent(prompt: str, agent: str, on_line=None):
+        calls.append(f"agent:{agent}")
+        if on_line is not None:
+            on_line('mem remember "remembered fact" --tag conventions')
+        class Result:
+            ok = True
+            partial = False
+            stderr = ""
+            exit_code = 0
+        return Result()
+
+    class FakeMemoryService:
+        def recall(self, cwd=None, query=None, tag=None):
+            return []
+
+        def remember(self, content, cwd=None, tags=None):
+            calls.append(f"remember:{content}")
+            return None
+
+    monkeypatch.setattr("mem.cli.config", fake_config)
+    monkeypatch.setattr("mem.cli.run_agent", fake_run_agent)
+    monkeypatch.setattr("mem.services.memory_service.MemoryService", lambda: FakeMemoryService())
+    monkeypatch.setattr("mem.cli.detect_available_agents", lambda: ["claude"])
+
+    class DummyLive:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def update(self, *args, **kwargs):
+            return None
+
+    monkeypatch.setattr("rich.live.Live", DummyLive)
+
+    from mem.cli import init as run_init
+
+    run_init(agent="claude", cwd=str(tmp_path))
+    assert calls[0].startswith("config:claude:")
+    assert calls[1] == "agent:claude"
+    assert calls[2] == "remember:remembered fact"

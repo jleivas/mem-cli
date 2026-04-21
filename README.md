@@ -299,7 +299,7 @@ Restart Claude Code after editing the file.
 
 ### 2. Generate AGENTS.md and sync CLAUDE.md
 
-Run `mem config` inside your project (or with `--global` for Claude Code's global config):
+Run `mem config` inside your project:
 
 ```bash
 # Generate the synced project pair: AGENTS.md + CLAUDE.md
@@ -311,8 +311,6 @@ mem config --agent claude
 # Generate the sync pair using Codex as the authoring agent
 mem config --agent codex
 
-# Write the synced pair under ~/.claude instead of the project dir
-mem config --agent claude --global
 ```
 
 `mem config` asks the selected agent to generate or update `AGENTS.md` dynamically from the
