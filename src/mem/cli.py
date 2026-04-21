@@ -731,6 +731,25 @@ def init(
         raise typer.Exit(code=result.exit_code)
 
 
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def serve() -> None:
+    """[bold #E93A7D]Start[/] the local [bold #F98C2B]MCP server[/] over stdio.
+
+    Exposes memory and observability as MCP tools so agents can read and
+    write project memories and inspect token usage programmatically.
+
+    \b
+    Register in Claude Code settings.json:
+      {
+        "mcpServers": {
+          "mem": { "command": "mem", "args": ["serve"] }
+        }
+      }
+    """
+    from .mcp.server import run as _run_mcp
+    _run_mcp()
+
+
 @app.command(rich_help_panel=f"[bold {ACCENT_YELLOW}]Other[/]")
 def help() -> None:  # noqa: A001
     """Show all [bold #F7B500]available commands[/]."""

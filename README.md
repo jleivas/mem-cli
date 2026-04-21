@@ -2,90 +2,12 @@
 
 `mem-cli` is a local, open source, cross-platform CLI for token observability and agent memory.
 
-It starts as a lightweight MVP focused on:
-
-- a portable CLI
-- lifecycle commands for a local monitor
-- a real-time terminal dashboard
-- a modular architecture ready for project memory and a local MCP server later
-
-## Vision
-
-The long-term goal is to help tools like Codex, Claude, and other agents keep useful project memory locally, expose token usage, and provide a clean path toward a local MCP backend.
-
-The project is intentionally starting small. This first release is only the foundation.
-
-## MVP Scope
-
-What this MVP does:
-
-- installs as a `mem` command
-- starts a local monitor process
-- stops the monitor process
-- reports current runtime status
-- shows a live terminal dashboard with real token usage from local JSONL events
-- keeps the codebase modular for future growth
-
-What it does not do yet:
-
-- persistent project memory
-- embeddings
-- vector databases
-- semantic search
-- real integrations with Claude or Codex APIs
-- a full MCP server
-- cloud services
-
-## Quick Start with Real Token Data
-
-The fastest path to seeing real data in the dashboard:
-
-```bash
-# 1. Install
-pip install -e .
-
-# 2. Start the dashboard
-mem dashboard
-
-# In another terminal — send a Claude Code command and capture it
-claude -p "hello" --verbose --output-format stream-json | tee -a "$HOME/.mem-cli/claude.jsonl"
-```
-
-The dashboard polls both files every second. Token counts appear within two seconds of each captured event.
+- **Local monitor** — tracks token events from Claude and Codex
+- **Live dashboard** — real-time terminal view of token usage
+- **Project memory** — per-project memory with tagging and search
+- **MCP server** — exposes memory and observability as tools for any MCP-compatible agent
 
 ---
-
-## Local JSONL Adapters
-
-`mem-cli` reads token events from local JSON or JSONL files written by the CLIs you already use.
-
-Use these environment variables:
-
-- `MEM_CODEX_JSONL` for a JSONL file that represents Codex token events
-- `MEM_CLAUDE_JSONL` for a JSONL file that represents Claude token events
-- `MEM_JSONL_PATHS` for extra comma-separated JSONL paths
-
-The adapter accepts one JSON object per line, a pretty-printed JSON document, or a JSON array of events. Example:
-
-```jsonl
-{"agent_name":"codex","input_tokens":18,"output_tokens":42,"timestamp":"2026-04-15T15:10:00+00:00","source":"codex-local"}
-{"agent_name":"claude","input_tokens":12,"output_tokens":21,"timestamp":"2026-04-15T15:10:05+00:00","source":"claude-local"}
-```
-
-If `agent_name` is omitted, the configured agent label is used.
-
-Example configuration:
-
-```bash
-mkdir -p "$HOME/.mem-cli"
-export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
-export MEM_CLAUDE_JSONL="$HOME/.mem-cli/claude.jsonl"
-mem dashboard --view both
-```
-
-If the files are empty or not configured, the dashboard will stay idle instead of fabricating token data.
-
-For Claude and Codex capture setup, see [`tokens-tracker.md`](tokens-tracker.md).
 
 ## Installation
 
@@ -95,55 +17,280 @@ Requires Python 3.11+.
 pip install -e .
 ```
 
-If you want development dependencies:
+Development dependencies:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-## Usage
+---
 
-Start the local monitor:
-
-```bash
-mem start
-```
-
-Check status:
+## Quick Start
 
 ```bash
-mem status
+# Launch the interactive menu
+mem
+
+# Or use commands directly
+mem start        # start the background monitor
+mem dashboard    # open the live token dashboard
+mem status       # check monitor runtime state
+mem stop         # stop the monitor
 ```
 
-Open the live dashboard:
+---
+
+## Memory Commands
+
+Store and retrieve project-scoped memories from any terminal.
 
 ```bash
-mem dashboard
+# Store a memory (scoped to the current directory)
+mem remember "use postgres for all new services" --tag architecture
+
+# List all memories for this project
+mem recall
+
+# Search by content
+mem recall "postgres"
+
+# Filter by tag
+mem recall --tag architecture
+
+# Delete a memory
+mem forget <id>
+
+# List all projects that have memories
+mem projects
+
+# Initialize memories from an AI agent (Claude or Codex)
+mem init
+mem init --agent claude
 ```
 
-Stop the monitor:
+---
+
+## MCP Server
+
+`mem serve` starts a local MCP server over stdio. It exposes all memory and
+observability operations as tools so agents can read and write project memories
+and inspect token usage without running shell commands.
+
+### Available tools
+
+| Tool | Description |
+|---|---|
+| `memory_remember` | Store a memory for a project |
+| `memory_recall` | List memories with optional query and tag filters |
+| `memory_forget` | Delete a memory by ID |
+| `memory_projects` | List all projects that have memories |
+| `monitor_snapshot` | Current token usage snapshot for all tracked agents |
+| `monitor_status` | Runtime state of the background monitor process |
+| `monitor_start` | Start the background monitor |
+| `monitor_stop` | Stop the background monitor |
+
+### Registering with Claude Code
+
+Add the following to your Claude Code `settings.json`
+(`~/.claude/settings.json` or the workspace-level `.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "mem": {
+      "command": "mem",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+Then restart Claude Code. The `mem` tools will appear automatically when an
+agent calls any `mem.*` tool.
+
+### Registering with a custom MCP client
+
+The server speaks the MCP stdio transport, so any MCP-compatible host can
+launch it the same way:
+
+```json
+{
+  "mcpServers": {
+    "mem": {
+      "command": "mem",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+If `mem` is not in `PATH`, use the full path to the executable:
+
+```json
+{
+  "mcpServers": {
+    "mem": {
+      "command": "/path/to/mem",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+### Running the server manually (for debugging)
 
 ```bash
-mem stop
+mem serve
 ```
 
-Show the version:
+The server blocks and communicates over stdin/stdout. You can use the
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) to test it:
 
 ```bash
-mem version
+npx @modelcontextprotocol/inspector mem serve
 ```
+
+### Tool reference
+
+#### `memory_remember`
+
+```
+memory_remember(content, tags?, cwd?)
+```
+
+- `content` — text to store
+- `tags` — optional list of strings
+- `cwd` — absolute project path; defaults to the caller's working directory
+
+Returns the saved memory with `id`, `project`, `content`, `tags`, `timestamp`.
+
+#### `memory_recall`
+
+```
+memory_recall(query?, tag?, cwd?)
+```
+
+- `query` — substring filter on content
+- `tag` — filter by a single tag
+- `cwd` — absolute project path
+
+Returns a list of memory objects, newest first.
+
+#### `memory_forget`
+
+```
+memory_forget(memory_id, cwd?)
+```
+
+Returns `{ "deleted": true|false, "id": "..." }`.
+
+#### `memory_projects`
+
+```
+memory_projects()
+```
+
+Returns a list of `{ "project", "project_name", "memory_count" }` objects.
+
+#### `monitor_snapshot`
+
+```
+monitor_snapshot()
+```
+
+Returns a list of agent usage objects:
+
+```json
+[
+  {
+    "agent_name": "claude",
+    "input_tokens": 1200,
+    "output_tokens": 4800,
+    "total_tokens": 6000,
+    "average_tokens_per_minute": 120.0,
+    "last_updated": "2026-04-21T10:00:00",
+    "state": "active",
+    "source": "jsonl"
+  }
+]
+```
+
+#### `monitor_status`
+
+```
+monitor_status()
+```
+
+Returns `{ "running", "pid", "started_at", "last_updated" }`.
+
+#### `monitor_start` / `monitor_stop`
+
+```
+monitor_start()
+monitor_stop()
+```
+
+Both return `{ "ok": true|false, "pid"?, "started_at"?, "error"? }`.
+
+---
+
+## Token Data Sources
+
+Set environment variables to point `mem-cli` at local JSONL files written by
+your agent CLIs:
+
+| Variable | Description |
+|---|---|
+| `MEM_CLAUDE_JSONL` | JSONL file for Claude token events |
+| `MEM_CODEX_JSONL` | JSONL file for Codex token events |
+| `MEM_JSONL_PATHS` | Extra comma-separated JSONL paths |
+
+Example:
+
+```bash
+mkdir -p "$HOME/.mem-cli"
+export MEM_CLAUDE_JSONL="$HOME/.mem-cli/claude.jsonl"
+export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
+mem dashboard --view both
+```
+
+To capture Claude Code output into the expected file:
+
+```bash
+claude -p "hello" --verbose --output-format stream-json \
+  | tee -a "$HOME/.mem-cli/claude.jsonl"
+```
+
+For full capture setup, see [`tokens-tracker.md`](tokens-tracker.md).
+
+---
 
 ## Runtime State
 
-`mem` stores minimal runtime state locally in the user home directory by default (`~/.mem-cli/`). The state is intentionally small and easy to clean up.
+`mem` stores minimal runtime state in `~/.mem-cli/` by default. The directory
+is small and safe to delete when the monitor is stopped.
 
-## Roadmap
-
-1. Real token tracking adapters
-2. Persistent memory per project
-3. Local MCP server
-4. Plugins and agent adapters
+---
 
 ## Project Layout
 
-The repository is organized to keep the CLI, services, UI, storage, models, and utilities separate so each layer can evolve independently.
+```
+src/mem/
+  cli.py           # CLI entrypoint (typer)
+  app.py           # monitor service factory
+  config.py        # path resolution helpers
+  mcp/
+    server.py      # FastMCP server with all tools
+  models/          # data models (TokenEvent, Memory, AgentStatus)
+  services/        # business logic (MemoryService, MonitorService, …)
+  storage/         # persistence (MemoryStore, RuntimeStateStore, …)
+  ui/              # live dashboard
+  utils/           # logging, time helpers
+tests/             # pytest suite
+```
+
+---
+
+## Roadmap
+
+See [`docs/roadmap.md`](docs/roadmap.md).
