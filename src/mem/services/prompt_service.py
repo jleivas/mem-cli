@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..config import get_app_home
@@ -77,6 +78,12 @@ class AgentResult:
         return not self.ok and self.exit_code not in (127, 1)
 
 
+@dataclass(slots=True)
+class AgentTextResult:
+    stdout: str
+    result: AgentResult
+
+
 def parse_remember(line: str) -> tuple[str, str] | None:
     """
     If *line* contains a mem remember command, return (content, tag).
@@ -144,3 +151,39 @@ def run_agent(
     stderr_thread.join(timeout=5.0)
 
     return AgentResult(exit_code=proc.returncode, stderr="".join(stderr_lines))
+
+
+def run_agent_text(prompt: str, agent: str) -> AgentTextResult:
+    """Run *agent* with *prompt* and capture the full stdout text."""
+    cmd = AGENT_COMMANDS.get(agent)
+    if cmd is None:
+        return AgentTextResult(
+            stdout="",
+            result=AgentResult(exit_code=1, stderr=f"Unknown agent: {agent!r}."),
+        )
+
+    full_cmd = cmd + [prompt]
+
+    try:
+        completed = subprocess.run(
+            full_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError:
+        return AgentTextResult(
+            stdout="",
+            result=AgentResult(
+                exit_code=127,
+                stderr=f"Agent '{agent}' not found in PATH. Make sure it is installed.",
+            ),
+        )
+
+    return AgentTextResult(
+        stdout=completed.stdout,
+        result=AgentResult(exit_code=completed.returncode, stderr=completed.stderr),
+    )

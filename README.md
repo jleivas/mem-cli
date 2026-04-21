@@ -234,6 +234,129 @@ Both return `{ "ok": true|false, "pid"?, "started_at"?, "error"? }`.
 
 ---
 
+## Agent Hooks
+
+Hook scripts for token capture live in the `hooks/` directory.
+
+| Script | Agent | Purpose |
+|---|---|---|
+| `claude-mem.sh` | Claude Code | Capture token usage at session end |
+| `codex-mem.py` | Codex CLI | Capture token usage (background watcher) |
+
+Memory management for Claude Code is handled entirely through the MCP server — no hooks needed.
+
+---
+
+## Claude Code — Memory via MCP
+
+Claude Code reads and writes project memories through the `mem` MCP server. No shell hooks or
+scripts are needed for memory management — the MCP tools are the single interface.
+
+### How it works
+
+```
+Claude Code starts
+  └─ Launches mem serve over stdio (registered in mcpServers)
+  └─ mem.* tools available from turn one
+
+First turn in a project
+  └─ Claude calls memory_recall(cwd="$PWD") to load stored context
+
+During the session
+  └─ Claude calls memory_remember(...) when it learns something worth keeping
+  └─ Claude calls memory_forget(id) when a memory is stale or wrong
+
+No hooks, no scripts, no injected context — MCP handles everything.
+```
+
+### 1. Register the MCP server in `~/.claude/settings.json`
+
+```json
+{
+  "mcpServers": {
+    "mem": {
+      "command": "mem",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+If `mem` is not in `PATH`, use the full executable path:
+
+```json
+{
+  "mcpServers": {
+    "mem": {
+      "command": "/path/to/mem",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+Restart Claude Code after editing the file.
+
+### 2. Generate AGENTS.md and sync CLAUDE.md
+
+Run `mem config` inside your project (or with `--global` for Claude Code's global config):
+
+```bash
+# Generate the synced project pair: AGENTS.md + CLAUDE.md
+mem config
+
+# Generate the sync pair using Claude as the authoring agent
+mem config --agent claude
+
+# Generate the sync pair using Codex as the authoring agent
+mem config --agent codex
+
+# Write the synced pair under ~/.claude instead of the project dir
+mem config --agent claude --global
+```
+
+`mem config` asks the selected agent to generate or update `AGENTS.md` dynamically from the
+current repository context. `AGENTS.md` is the canonical file, and `CLAUDE.md` is created as a
+symlink to it. The generated content keeps shared instructions plus Claude-only and Codex-only
+sections when needed, and includes the `mem` MCP workflow: `memory_recall`, `memory_remember`,
+and `memory_forget`.
+
+### 3. Token capture hook (optional)
+
+The only hook needed is for token tracking. Install `claude-mem.sh` as a `Stop` hook:
+
+```bash
+mkdir -p ~/.mem-cli/hooks
+cp hooks/claude-mem.sh ~/.mem-cli/hooks/claude-mem.sh
+chmod +x ~/.mem-cli/hooks/claude-mem.sh
+```
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.mem-cli/hooks/claude-mem.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> **Token capture for Codex:** use `hooks/codex-mem.py` as a background
+> watcher. It polls `~/.codex/sessions/` and writes token events to
+> `~/.mem-cli/codex.jsonl`. See [`tokens-tracker.md`](tokens-tracker.md)
+> for setup instructions.
+
+---
+
 ## Token Data Sources
 
 Set environment variables to point `mem-cli` at local JSONL files written by

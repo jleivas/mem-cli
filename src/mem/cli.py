@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import shutil
+from pathlib import Path
 from typing import cast
 
 import typer
@@ -21,8 +23,10 @@ from .app import build_monitor_service
 from .services.memory_service import MemoryService
 from .services.prompt_service import (
     AgentResult,
+    AgentTextResult,
     build_prompt,
     run_agent,
+    run_agent_text,
     parse_remember,
     detect_available_agents,
     AGENT_COMMANDS,
@@ -53,8 +57,9 @@ MENU_ROW_1 = (
 )
 MENU_ROW_2 = (
     ("5", "Init memory",   ACCENT_PINK),
-    ("6", "Start MCP",     ACCENT_ORANGE),
-    ("7", "Stop MCP",      ACCENT_CORAL),
+    ("6", "Config",        ACCENT_CORAL),
+    ("7", "Start MCP",     ACCENT_ORANGE),
+    ("8", "Stop MCP",      ACCENT_CORAL),
     ("0", "Quit",          ACCENT_YELLOW),
 )
 MENU_ITEMS = MENU_ROW_1 + MENU_ROW_2
@@ -139,7 +144,7 @@ def _build_menu_options() -> Table:
     for row in (MENU_ROW_1, MENU_ROW_2):
         inner = Table.grid(padding=(0, 1))
         for _ in row:
-            inner.add_column()
+            inner.add_column(ratio=1)
         inner.add_row(*[_menu_cell(k, t, a) for k, t, a in row])
         outer.add_row(inner)
     return outer
@@ -154,8 +159,9 @@ def _render_footer(message: str = "Use the number keys to navigate.") -> Panel:
         ("3", " Dashboard  ", ACCENT_ORANGE),
         ("4", " Status  ", ACCENT_YELLOW),
         ("5", " Init  ", ACCENT_PINK),
-        ("6", " Start MCP  ", ACCENT_ORANGE),
-        ("7", " Stop MCP  ", ACCENT_CORAL),
+        ("6", " Config  ", ACCENT_CORAL),
+        ("7", " Start MCP  ", ACCENT_ORANGE),
+        ("8", " Stop MCP  ", ACCENT_CORAL),
         ("0", " Quit", ACCENT_YELLOW),
     ]
     for key, label, accent in pairs:
@@ -374,6 +380,11 @@ def _run_menu() -> None:
             _pause_for_continue()
         elif choice == "6":
             console.clear()
+            import subprocess, sys as _sys
+            subprocess.run([_sys.argv[0], "config"])
+            _pause_for_continue()
+        elif choice == "7":
+            console.clear()
             console.print(Panel.fit(
                 Text.assemble(
                     ("Starting MCP server…\n", f"bold {ACCENT_ORANGE}"),
@@ -382,7 +393,7 @@ def _run_menu() -> None:
                 border_style=ACCENT_ORANGE,
             ))
             _launch_mcp()
-        elif choice == "7":
+        elif choice == "8":
             console.clear()
             result = _mcp_stop_action()
             console.print(_render_action_screen(result))
@@ -394,7 +405,7 @@ def _run_menu() -> None:
             console.clear()
             console.print(_render_action_screen(_ActionResult(
                 title="Unknown option",
-                body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-7.", border_style="red"),
+                body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-8.", border_style="red"),
                 border_style="red",
             )))
             _pause_for_continue()
@@ -536,12 +547,15 @@ def recall(
     query: str = typer.Argument("", help="Optional search query (substring match on content)."),
     tag: str = typer.Option("", "--tag", "-t", help="Filter by tag."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+    plain: bool = typer.Option(False, "--plain", "-p", help="Plain text output (no formatting). Useful for scripts and hooks."),
 ) -> None:
     """[bold #F25C5C]List[/] memories for the current project."""
     svc = _memory_service()
     memories = svc.recall(cwd=cwd or None, query=query or None, tag=tag or None)
 
     if not memories:
+        if plain:
+            return
         parts = []
         if tag:
             parts.append(f"tag [bold]{tag}[/bold]")
@@ -554,6 +568,12 @@ def recall(
             body=Panel.fit(msg, border_style=ACCENT_YELLOW),
             border_style=ACCENT_YELLOW,
         )))
+        return
+
+    if plain:
+        for m in memories:
+            tags_str = f"  [{', '.join(m.tags)}]" if m.tags else ""
+            print(f"{m.content}{tags_str}")
         return
 
     title_parts = [f"Memories — {memories[0].project_name}"]
@@ -860,6 +880,412 @@ def mcp_stop() -> None:
     """[bold #F25C5C]Stop[/] the local MCP server process."""
     result = _mcp_stop_action()
     console.print(_render_action_screen(result))
+
+
+# ---------------------------------------------------------------------------
+# Config command — generate AGENTS.md and sync CLAUDE.md as a symlink
+# ---------------------------------------------------------------------------
+
+
+def _config_prompt(agent: str, existing_agents: str, cwd: Path) -> str:
+    priority_agent = "Claude" if agent == "claude" else "Codex"
+    other_agent = "Codex" if agent == "claude" else "Claude"
+    existing_block = existing_agents.strip()
+    existing_text = existing_block or "(AGENTS.md does not exist yet.)"
+
+    return f"""
+You are updating the canonical AGENTS.md file for the mem CLI repository.
+
+Goal:
+- Generate the final AGENTS.md content only.
+- Update the file if it exists, or create it if it does not.
+- Keep CLAUDE.md as a symlink to AGENTS.md. Do not put divergent content in CLAUDE.md.
+
+Rules:
+- Output markdown only. No code fences. No explanation.
+- Prioritize the selected agent's ordering first: {priority_agent} sections before {other_agent} sections if that improves clarity.
+- Preserve compatibility for Claude Code, Codex, and other MCP-capable agents.
+- Separate shared guidance from agent-specific guidance.
+- Include explicit blocks for Claude-only and Codex-only instructions when needed.
+- Add or keep mem MCP instructions: memory_recall, memory_remember, memory_forget.
+- Keep content concise, project-scoped, and organized for low token consumption.
+- Use the repository context at {cwd}.
+
+Project classification:
+- First decide whether this repository is primarily a backend service, a frontend app, a repository of files/directories, or a mixed project.
+- Write only the sections that fit the project. Do not force irrelevant sections into the output.
+- If the repo is mixed, include the relevant sections from more than one category, but keep the result compact.
+
+When the project is a backend service, prioritize:
+- Stack, runtime, entrypoints, deployment targets.
+- Routes, controllers, services, auth, middleware, data flow.
+- Environment variables, secrets, integrations, persistence boundaries.
+- API contracts, request/response conventions, error handling.
+
+When the project is a frontend app, prioritize:
+- Framework, rendering model, bootstrapping, routing.
+- Component structure, state management, styling system, assets.
+- Build/test commands, deployment targets, environment variables.
+- Accessibility, responsive behavior, performance constraints, design tokens.
+
+When the project is a repository of files/directories or a content-heavy workspace, prioritize:
+- Directory taxonomy, naming conventions, file formats, and ownership rules.
+- How files are created, updated, validated, moved, archived, or generated.
+- Canonical entry files, templates, indexes, and sync rules.
+- Search conventions, indexing rules, and any automation that relies on the layout.
+
+Operational focus:
+- Preserve the most useful technical facts for future agents, not long-form prose.
+- Prefer command names, file paths, routes, env vars, and rules over narrative descriptions.
+- Keep memory-related guidance short enough to minimize token use but specific enough to avoid mistakes.
+
+Current AGENTS.md content:
+{existing_text}
+
+Required output structure:
+1. Shared project overview.
+2. Project type summary and the sections that matter for this repo.
+3. MCP usage for mem.
+4. Shared memory conventions and commands.
+5. Backend-specific block if applicable.
+6. Frontend-specific block if applicable.
+7. Files/directories-specific block if applicable.
+8. Claude-specific block.
+9. Codex-specific block.
+10. Sync note stating CLAUDE.md is a symlink to AGENTS.md.
+"""
+
+
+def _normalize_markdown_output(text: str) -> str:
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if len(lines) >= 2 and lines[0].startswith("```") and lines[-1].startswith("```"):
+            cleaned = "\n".join(lines[1:-1]).strip()
+    return cleaned + ("\n" if cleaned and not cleaned.endswith("\n") else "")
+
+
+def _write_text(path: Path, content: str) -> bool:
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    if existing == content:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return True
+
+
+def _sync_claude_symlink(claude_path: Path, agents_path: Path) -> None:
+    claude_path.parent.mkdir(parents=True, exist_ok=True)
+    if claude_path.exists() or claude_path.is_symlink():
+        if claude_path.is_dir() and not claude_path.is_symlink():
+            shutil.rmtree(claude_path)
+        else:
+            claude_path.unlink()
+    target = agents_path.name if claude_path.parent == agents_path.parent else os.path.relpath(agents_path, claude_path.parent)
+    claude_path.symlink_to(target)
+
+
+def _is_claude_synced_to_agents(claude_path: Path, agents_path: Path) -> bool:
+    return claude_path.is_symlink() and claude_path.resolve() == agents_path.resolve()
+
+
+def _select_config_mode() -> str:
+    console.print()
+    console.print(Text("Choose a configuration mode:", style=f"bold {ACCENT_ORANGE}"))
+    console.print(f"  [1] configure a new AGENTS.md")
+    console.print(f"  [2] only add mem MCP instructions in current AGENTS.md or CLAUDE.md")
+    console.print()
+    while True:
+        try:
+            raw = console.input(f"[bold {ACCENT_YELLOW}]Select mode (1-2): [/]").strip()
+        except (EOFError, KeyboardInterrupt):
+            raise typer.Exit(code=0)
+        if raw == "1":
+            return "new"
+        if raw == "2":
+            return "mcp-only"
+        console.print("  Invalid choice, try again.", style="red")
+
+
+def _mcp_instructions_block() -> str:
+    return """## MCP Usage for mem
+- Use mem MCP for durable project context.
+- `memory_recall`: check this first when repo history, conventions, or prior decisions matter.
+- `memory_remember`: store stable repo facts, validated conventions, and repeatable fixes.
+- `memory_forget`: remove stale or incorrect memory when behavior or decisions change.
+
+## Shared Memory Conventions and Commands
+- Keep memories short, factual, and project-scoped.
+- Do not store secrets, credentials, or one-off debugging noise.
+- Prefer file names, endpoints, commands, and accepted conventions over narrative notes.
+- Use `rg` for search and `apply_patch` for manual edits.
+- Preserve existing user changes and avoid unrelated churn.
+"""
+
+
+def _append_or_replace_mcp_block(content: str) -> str:
+    block = _mcp_instructions_block().strip()
+    text = content.strip()
+    if not text:
+        return block + "\n"
+
+    marker = "## MCP Usage for mem"
+    if marker in text:
+        start = text.index(marker)
+        next_markers = [
+            idx for idx in (
+                text.find("\n## ", start + len(marker)),
+                text.find("\n# ", start + len(marker)),
+            )
+            if idx != -1
+        ]
+        end = min(next_markers) if next_markers else len(text)
+        updated = text[:start].rstrip() + "\n\n" + block + "\n"
+        if end < len(text):
+            updated += text[end:].lstrip("\n")
+        return updated.rstrip() + "\n"
+
+    return text + "\n\n" + block + "\n"
+
+
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def config(
+    agent: str = typer.Option(
+        "all",
+        "--agent",
+        "-a",
+        help="Agent to use when generating AGENTS.md: 'claude', 'codex', or 'all'.",
+        case_sensitive=False,
+    ),
+    glob: bool = typer.Option(  # noqa: A002
+        False,
+        "--global",
+        "-g",
+        help="Write the synced files under ~/.claude instead of the project directory.",
+    ),
+    cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+) -> None:
+    """[bold #E93A7D]Generate[/] [bold #F98C2B]AGENTS.md[/] and sync [bold #F98C2B]CLAUDE.md[/] as a symlink.
+
+    The selected agent generates the canonical AGENTS.md content dynamically.
+    CLAUDE.md is then rewritten as a symlink to AGENTS.md so Claude Code and
+    Codex stay aligned. The generated file keeps shared instructions plus
+    agent-specific blocks when needed.
+
+    \b
+    Examples:
+      mem config               # generate AGENTS.md and symlink CLAUDE.md
+      mem config --agent claude
+      mem config --agent codex
+      mem config --global      # write under ~/.claude instead of the project dir
+    """
+    resolved_cwd = Path(cwd).resolve() if cwd else Path.cwd()
+    agent_lower = agent.lower()
+
+    if agent_lower not in {"claude", "codex", "all"}:
+        console.print(Panel.fit(
+            f"Unknown agent {agent!r}. Choose one of: 'claude', 'codex', 'all'.",
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    if agent_lower == "all":
+        available = detect_available_agents()
+        if not available:
+            hints = "\n".join(
+                f"  {name}: {hint}" for name, hint in AGENT_INSTALL_HINTS.items()
+            )
+            console.print(_render_action_screen(_ActionResult(
+                title="No agent found",
+                body=Panel.fit(
+                    Text.assemble(
+                        ("No supported agent is installed.\n\n", "white"),
+                        ("Install one of:\n", "dim"),
+                        (hints, f"bold {ACCENT_YELLOW}"),
+                    ),
+                    border_style="red",
+                ),
+                border_style="red",
+            )))
+            raise typer.Exit(code=1)
+
+        if len(available) == 1:
+            chosen = available[0]
+        else:
+            console.print()
+            console.print(Text("Available agents:", style=f"bold {ACCENT_ORANGE}"))
+            for i, name in enumerate(available, 1):
+                console.print(f"  [{i}] {name}")
+            console.print()
+            while True:
+                try:
+                    raw = console.input(f"[bold {ACCENT_YELLOW}]Select agent (1-{len(available)}): [/]").strip()
+                except (EOFError, KeyboardInterrupt):
+                    raise typer.Exit(code=0)
+                if raw.isdigit() and 1 <= int(raw) <= len(available):
+                    chosen = available[int(raw) - 1]
+                    break
+                console.print("  Invalid choice, try again.", style="red")
+    else:
+        chosen = agent_lower
+
+    if chosen not in AGENT_COMMANDS:
+        agents = ", ".join(f"'{a}'" for a in AGENT_COMMANDS)
+        console.print(Panel.fit(
+            f"Unknown agent {chosen!r}. Choose one of: {agents}.",
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    if chosen not in detect_available_agents():
+        console.print(Panel.fit(
+            Text.assemble(
+                (f"Agent '{chosen}' is not installed.\n", "white"),
+                (f"Install it with: {AGENT_INSTALL_HINTS.get(chosen, '')}", f"bold {ACCENT_YELLOW}"),
+            ),
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    base_dir = Path.home() / ".claude" if glob else resolved_cwd
+    agents_path = base_dir / "AGENTS.md"
+    claude_path = base_dir / "CLAUDE.md"
+    existing_agents = agents_path.read_text(encoding="utf-8") if agents_path.exists() else ""
+
+    config_mode = _select_config_mode()
+
+    if config_mode == "mcp-only":
+        target_path = agents_path if agents_path.exists() else claude_path if claude_path.exists() and not claude_path.is_symlink() else agents_path
+        source_path = agents_path if agents_path.exists() else claude_path if claude_path.exists() else target_path
+        source_text = source_path.read_text(encoding="utf-8") if source_path.exists() else ""
+        updated_text = _append_or_replace_mcp_block(source_text)
+
+        if target_path != agents_path and claude_path.exists() and claude_path.is_symlink():
+            target_path = agents_path
+
+        changed = _write_text(target_path, updated_text)
+        if target_path == agents_path:
+            _sync_claude_symlink(claude_path, agents_path)
+
+        table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
+        table.add_column("File", style=f"bold {ACCENT_YELLOW}", no_wrap=True)
+        table.add_column("Path", style="dim")
+        table.add_column("Result", no_wrap=True)
+
+        table.add_row(
+            target_path.name,
+            str(target_path),
+            Text("updated", style=f"bold {ACCENT_PINK}") if changed else Text("already up to date", style="dim"),
+        )
+        if target_path == agents_path:
+            table.add_row(
+                "CLAUDE.md",
+                str(claude_path),
+                Text("synced", style=f"bold {ACCENT_PINK}") if claude_path.exists() or claude_path.is_symlink() else Text("created", style=f"bold {ACCENT_PINK}"),
+            )
+
+        console.print(_render_action_screen(_ActionResult(
+            title="Config",
+            body=table,
+            border_style=ACCENT_PINK,
+        )))
+        return
+
+    if _is_claude_synced_to_agents(claude_path, agents_path):
+        console.print()
+        console.print(Panel.fit(
+            Text.assemble(
+                ("The project already seems to have been configured.\n", "white"),
+                ("Do you want to continue anyway?", "bold"),
+            ),
+            border_style=ACCENT_ORANGE,
+            title=Text("Already configured", style=f"bold {ACCENT_ORANGE}"),
+        ))
+        try:
+            confirm = console.input(
+                f"[bold {ACCENT_YELLOW}]Continue anyway? (y/N): [/]"
+            ).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            confirm = ""
+        if confirm != "y":
+            console.print(Text("  Cancelled.", style="dim"))
+            raise typer.Exit(code=0)
+
+    prompt = _config_prompt(chosen, existing_agents, resolved_cwd)
+    console.print()
+    from rich.live import Live
+    from rich.spinner import Spinner
+
+    def _make_config_live() -> Group:
+        spinner_text = Text.assemble(
+            (" Generating ", "dim"),
+            ("AGENTS.md", f"bold {ACCENT_YELLOW}"),
+            (" with ", "dim"),
+            (chosen, f"bold {ACCENT_YELLOW}"),
+            ("...", "dim"),
+        )
+        return Group(
+            Spinner("dots", text=spinner_text),
+            Panel.fit(
+                Text.assemble(
+                    ("Updating the project memory guide and syncing CLAUDE.md as a symlink.", "dim"),
+                ),
+                border_style=ACCENT_ORANGE,
+            ),
+        )
+
+    with Live(_make_config_live(), console=console, refresh_per_second=12) as live:
+        agent_output: AgentTextResult = run_agent_text(prompt, chosen)
+        live.update(_make_config_live())
+
+    generated_agents = _normalize_markdown_output(agent_output.stdout)
+
+    if not generated_agents:
+        console.print(Panel.fit(
+            Text.assemble(
+                ("The agent did not produce AGENTS.md content.\n", "white"),
+                (agent_output.result.stderr, "red") if agent_output.result.stderr else ("", ""),
+            ),
+            border_style="red",
+            title=Text("Config failed", style="bold red"),
+        ))
+        raise typer.Exit(code=agent_output.result.exit_code or 1)
+
+    agents_changed = _write_text(agents_path, generated_agents)
+    _sync_claude_symlink(claude_path, agents_path)
+
+    # ---- Result table -------------------------------------------------------
+    table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
+    table.add_column("File", style=f"bold {ACCENT_YELLOW}", no_wrap=True)
+    table.add_column("Path", style="dim")
+    table.add_column("Result", no_wrap=True)
+
+    for label, path_str, changed in (
+        ("AGENTS.md", str(agents_path), agents_changed),
+        ("CLAUDE.md", str(claude_path), True),
+    ):
+        result_text = (
+            Text("updated", style=f"bold {ACCENT_PINK}")
+            if changed
+            else Text("already up to date", style="dim")
+        )
+        table.add_row(label, path_str, result_text)
+
+    console.print(_render_action_screen(_ActionResult(
+        title="Config",
+        body=table,
+        border_style=ACCENT_PINK,
+    )))
+
+    if not agent_output.result.ok:
+        console.print(Panel.fit(
+            Text.assemble(
+                ("The agent exited with a non-zero status after producing AGENTS.md.\n", "white"),
+                (agent_output.result.stderr, "red") if agent_output.result.stderr else ("", ""),
+            ),
+            border_style=ACCENT_ORANGE,
+            title=Text("Partial completion", style=f"bold {ACCENT_ORANGE}"),
+        ))
 
 
 def _serve_tty() -> None:
