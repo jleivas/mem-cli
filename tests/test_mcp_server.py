@@ -148,13 +148,20 @@ class TestMonitorSnapshot:
             state="active",
             source="jsonl",
         )
-        svc = MagicMock()
-        svc.snapshot.return_value = [status]
-        with patch("mem.mcp.server._get_monitor", return_value=svc):
+        store = MagicMock()
+        store.load.return_value = [status]
+        with patch("mem.mcp.server._snapshot_store", return_value=store):
             result = monitor_snapshot()
         assert len(result) == 1
         assert result[0]["agent_name"] == "claude"
         assert result[0]["total_tokens"] == 30
+
+    def test_returns_empty_when_daemon_not_running(self):
+        store = MagicMock()
+        store.load.return_value = []
+        with patch("mem.mcp.server._snapshot_store", return_value=store):
+            result = monitor_snapshot()
+        assert result == []
 
 
 # ---------------------------------------------------------------------------

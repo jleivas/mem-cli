@@ -15,6 +15,7 @@ from rich.text import Text
 from . import APP_VERSION
 from .config import get_default_claude_jsonl_path
 from .config import get_default_codex_jsonl_path
+from .config import get_mcp_state_path
 from .config import get_runtime_state_path
 from .app import build_monitor_service
 from .services.memory_service import MemoryService
@@ -43,14 +44,20 @@ ACCENT_PINK = "#E93A7D"
 ACCENT_CORAL = "#F25C5C"
 ACCENT_ORANGE = "#F98C2B"
 ACCENT_YELLOW = "#F7B500"
-# (key, title, description, accent_color)
-MENU_ITEMS = (
-    ("1", "Start monitor", "Launch the background watcher.", ACCENT_PINK),
-    ("2", "Stop monitor", "Shut down the watcher cleanly.", ACCENT_CORAL),
-    ("3", "Dashboard", "Open the live usage screen.", ACCENT_ORANGE),
-    ("4", "Status", "Inspect the runtime state.", ACCENT_YELLOW),
-    ("0", "Quit", "Close the interactive menu.", ACCENT_YELLOW),
+# (key, title, accent_color) — laid out in two rows of four
+MENU_ROW_1 = (
+    ("1", "Start monitor", ACCENT_PINK),
+    ("2", "Stop monitor",  ACCENT_CORAL),
+    ("3", "Dashboard",     ACCENT_ORANGE),
+    ("4", "Status",        ACCENT_YELLOW),
 )
+MENU_ROW_2 = (
+    ("5", "Init memory",   ACCENT_PINK),
+    ("6", "Start MCP",     ACCENT_ORANGE),
+    ("7", "Stop MCP",      ACCENT_CORAL),
+    ("0", "Quit",          ACCENT_YELLOW),
+)
+MENU_ITEMS = MENU_ROW_1 + MENU_ROW_2
 
 
 @dataclass(slots=True)
@@ -74,6 +81,39 @@ def _registry() -> ProcessRegistry:
     return ProcessRegistry(RuntimeStateStore(get_runtime_state_path()))
 
 
+_LOGO_LINES = [
+    "                  ░▓▓▓▒░                                        ",
+    "                ░▓▓▓▒▒▓▓░        ▒▒▒▒░                          ",
+    "              ░▒▓▓░   ░▓▓░     ░▒▒▒▒▒▒▒░                        ",
+    "             ░▓▓▓░     ▓▓▒    ▒▓▓░   ░▒▒░                       ",
+    "          ░▒▓▓▓▒       ░▓▓   ░▓▓░     ░▒▒▒░░                    ",
+    "  ▓▓▓▓▓▓▓▓▓▓▒░         ░▓▓▒ ░▓▓░        ░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░  ",
+    "                         ░▓▓▓▓▓░                                ",
+    "                           ░░░                                  ",
+]
+# Positional gradient: Pink → Coral → Orange → Yellow (left to right)
+_LOGO_COLORS: list[tuple[int, str]] = [
+    (22, "#E93A7D"),   # Pink
+    (40, "#F25C5C"),   # Coral
+    (53, "#F98C2B"),   # Orange
+    (999, "#F7B500"),  # Yellow
+]
+
+
+def _build_logo() -> Text:
+    t = Text(no_wrap=True)
+    for i, line in enumerate(_LOGO_LINES):
+        for col, ch in enumerate(line):
+            if ch in ("▓", "▒", "░"):
+                color = next(c for limit, c in _LOGO_COLORS if col <= limit)
+                t.append(ch, style=f"bold {color}")
+            else:
+                t.append(ch)
+        if i < len(_LOGO_LINES) - 1:
+            t.append("\n")
+    return t
+
+
 def _build_brand_line() -> Text:
     t = Text()
     t.append("m", style=f"bold {ACCENT_PINK}")
@@ -85,42 +125,42 @@ def _build_brand_line() -> Text:
     return t
 
 
+def _menu_cell(key: str, title: str, accent: str) -> Panel:
+    is_quit = key == "0"
+    title_style = f"bold {accent}" if not is_quit else "dim white"
+    label = Text()
+    label.append(f" {key} ", style=f"reverse bold {accent}")
+    label.append(f" {title}", style=title_style)
+    return Panel(Align.center(label), box=ROUNDED, border_style=accent, padding=(0, 0))
+
+
 def _build_menu_options() -> Table:
-    table = Table.grid(padding=(0, 1))
-    for _ in MENU_ITEMS:
-        table.add_column()
-
-    cells = []
-    for key, title, _, accent in MENU_ITEMS:
-        is_quit = key == "0"
-        title_style = f"bold {accent}" if not is_quit else "dim white"
-        label = Text()
-        label.append(f" {key} ", style=f"reverse bold {accent}")
-        label.append(f" {title}", style=title_style)
-        cells.append(Panel(
-            Align.center(label),
-            box=ROUNDED,
-            border_style=accent,
-            padding=(0, 0),
-        ))
-
-    table.add_row(*cells)
-    return table
+    outer = Table.grid(padding=(0, 0))
+    for row in (MENU_ROW_1, MENU_ROW_2):
+        inner = Table.grid(padding=(0, 1))
+        for _ in row:
+            inner.add_column()
+        inner.add_row(*[_menu_cell(k, t, a) for k, t, a in row])
+        outer.add_row(inner)
+    return outer
 
 
 
 def _render_footer(message: str = "Use the number keys to navigate.") -> Panel:
     line = Text()
-    line.append("1", style=f"bold {ACCENT_PINK}")
-    line.append(" Start  ")
-    line.append("2", style=f"bold {ACCENT_CORAL}")
-    line.append(" Stop  ")
-    line.append("3", style=f"bold {ACCENT_ORANGE}")
-    line.append(" Dashboard  ")
-    line.append("4", style=f"bold {ACCENT_YELLOW}")
-    line.append(" Status  ")
-    line.append("0", style=f"bold {ACCENT_YELLOW}")
-    line.append(" Quit")
+    pairs = [
+        ("1", " Start  ", ACCENT_PINK),
+        ("2", " Stop  ", ACCENT_CORAL),
+        ("3", " Dashboard  ", ACCENT_ORANGE),
+        ("4", " Status  ", ACCENT_YELLOW),
+        ("5", " Init  ", ACCENT_PINK),
+        ("6", " Start MCP  ", ACCENT_ORANGE),
+        ("7", " Stop MCP  ", ACCENT_CORAL),
+        ("0", " Quit", ACCENT_YELLOW),
+    ]
+    for key, label, accent in pairs:
+        line.append(key, style=f"bold {accent}")
+        line.append(label)
     return Panel(
         Align.center(line),
         box=ROUNDED,
@@ -139,7 +179,11 @@ def _render_home_screen() -> Group:
     return Group(
         Text(""),
         Panel(
-            _build_brand_line(),
+            Group(
+                Align.center(_build_logo()),
+                Text(""),
+                Align.center(_build_brand_line()),
+            ),
             box=ROUNDED,
             border_style=ACCENT_PINK,
             padding=(0, 1),
@@ -233,23 +277,69 @@ def _stop_monitor_action() -> _ActionResult:
     return _ActionResult(title="Monitor stopped", body=table, border_style=ACCENT_CORAL)
 
 
+def _mcp_registry() -> ProcessRegistry:
+    return ProcessRegistry(RuntimeStateStore(get_mcp_state_path()))
+
+
 def _status_action() -> _ActionResult:
-    state = _registry().load_state()
+    monitor_state = _registry().load_state()
+    mcp_state = _mcp_registry().load_state()
+
     table = Table(title="Runtime Status", expand=True)
-    table.add_column("Field", style=ACCENT_ORANGE)
-    table.add_column("Value", style="white")
+    table.add_column("Service", style=ACCENT_ORANGE, no_wrap=True)
+    table.add_column("State", no_wrap=True)
+    table.add_column("PID", style="dim", no_wrap=True)
+    table.add_column("Started", style="dim", no_wrap=True)
 
-    if not state:
-        table.add_row("Service", "stopped")
-        table.add_row("State file", str(get_runtime_state_path()))
-        return _ActionResult(title="Status", body=table, border_style=ACCENT_YELLOW)
+    def _state_text(running: bool) -> Text:
+        return (
+            Text("running", style=f"bold {ACCENT_PINK}")
+            if running
+            else Text("stopped", style="dim")
+        )
 
-    table.add_row("Service", "running" if state.running else "stopped")
-    table.add_row("PID", str(state.pid) if state.pid else "-")
-    table.add_row("Started", state.started_at.isoformat() if state.started_at else "-")
-    table.add_row("Updated", state.last_updated.isoformat() if state.last_updated else "-")
-    table.add_row("State file", str(get_runtime_state_path()))
-    return _ActionResult(title="Status", body=table, border_style=ACCENT_PINK)
+    # Monitor row
+    if monitor_state:
+        table.add_row(
+            "Monitor",
+            _state_text(monitor_state.running),
+            str(monitor_state.pid) if monitor_state.pid else "-",
+            monitor_state.started_at.isoformat() if monitor_state.started_at else "-",
+        )
+    else:
+        table.add_row("Monitor", _state_text(False), "-", "-")
+
+    # MCP server row
+    if mcp_state:
+        table.add_row(
+            "MCP server",
+            _state_text(mcp_state.running),
+            str(mcp_state.pid) if mcp_state.pid else "-",
+            mcp_state.started_at.isoformat() if mcp_state.started_at else "-",
+        )
+    else:
+        table.add_row("MCP server", _state_text(False), "-", "-")
+
+    any_running = (monitor_state and monitor_state.running) or (mcp_state and mcp_state.running)
+    return _ActionResult(
+        title="Status",
+        body=table,
+        border_style=ACCENT_PINK if any_running else ACCENT_YELLOW,
+    )
+
+
+def _mcp_stop_action() -> _ActionResult:
+    state = _mcp_registry().stop()
+    if state is None:
+        return _ActionResult(
+            title="Stop MCP server",
+            body=Panel.fit("No running MCP server found.", border_style=ACCENT_YELLOW),
+            border_style=ACCENT_YELLOW,
+        )
+    table = Table.grid(padding=(0, 1))
+    table.add_row(Text("Stopped", style=f"bold {ACCENT_YELLOW}"), Text("MCP server halted", style="green"))
+    table.add_row(Text("PID", style=f"bold {ACCENT_CORAL}"), Text(str(state.pid), style="white"))
+    return _ActionResult(title="MCP server stopped", body=table, border_style=ACCENT_CORAL)
 
 
 def _run_menu() -> None:
@@ -278,6 +368,25 @@ def _run_menu() -> None:
             result = _status_action()
             console.print(_render_action_screen(result))
             _pause_for_continue()
+        elif choice == "5":
+            console.clear()
+            _launch_init()
+            _pause_for_continue()
+        elif choice == "6":
+            console.clear()
+            console.print(Panel.fit(
+                Text.assemble(
+                    ("Starting MCP server…\n", f"bold {ACCENT_ORANGE}"),
+                    ("Press ", "dim"), ("Ctrl+C", f"bold {ACCENT_YELLOW}"), (" to stop and return to the menu.", "dim"),
+                ),
+                border_style=ACCENT_ORANGE,
+            ))
+            _launch_mcp()
+        elif choice == "7":
+            console.clear()
+            result = _mcp_stop_action()
+            console.print(_render_action_screen(result))
+            _pause_for_continue()
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
             console.clear()
             return
@@ -285,7 +394,7 @@ def _run_menu() -> None:
             console.clear()
             console.print(_render_action_screen(_ActionResult(
                 title="Unknown option",
-                body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-4.", border_style="red"),
+                body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-7.", border_style="red"),
                 border_style="red",
             )))
             _pause_for_continue()
@@ -314,6 +423,21 @@ def status() -> None:
     """Show monitor [bold #F7B500]status[/]."""
     result = _status_action()
     console.print(_render_action_screen(result))
+
+
+def _launch_init() -> None:
+    import subprocess
+    import sys
+    subprocess.run([sys.argv[0], "init"])
+
+
+def _launch_mcp() -> None:
+    import subprocess
+    import sys
+    try:
+        subprocess.run([sys.argv[0], "serve"])
+    except KeyboardInterrupt:
+        pass
 
 
 def _launch_dashboard(view: str = "both") -> None:
@@ -731,6 +855,104 @@ def init(
         raise typer.Exit(code=result.exit_code)
 
 
+@app.command(name="mcp-stop", rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def mcp_stop() -> None:
+    """[bold #F25C5C]Stop[/] the local MCP server process."""
+    result = _mcp_stop_action()
+    console.print(_render_action_screen(result))
+
+
+def _serve_tty() -> None:
+    """Live status display for interactive (TTY) usage of mem serve."""
+    import os
+    import time
+
+    from rich.live import Live
+    from rich.spinner import Spinner
+
+    from .config import get_mcp_state_path
+    from .storage.runtime_state import RuntimeState, RuntimeStateStore
+    from .utils.time import utc_now
+
+    state_store = RuntimeStateStore(get_mcp_state_path())
+    started_at = utc_now()
+    state_store.save(RuntimeState(
+        running=True,
+        pid=os.getpid(),
+        started_at=started_at,
+        last_updated=started_at,
+    ))
+
+    def _elapsed(since) -> str:
+        secs = int((utc_now() - since).total_seconds())
+        h, rem = divmod(secs, 3600)
+        m, s = divmod(rem, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    def _make_display() -> Group:
+        status_line = Text()
+        status_line.append("● ", style=f"bold {ACCENT_PINK}")
+        status_line.append("running", style=f"bold {ACCENT_PINK}")
+        status_line.append("  ", style="")
+        status_line.append(_elapsed(started_at), style=f"dim {ACCENT_YELLOW}")
+
+        info = Table.grid(padding=(0, 2))
+        info.add_column(style=f"dim {ACCENT_ORANGE}")
+        info.add_column(style="white")
+        info.add_row("PID",     str(os.getpid()))
+        info.add_row("started", started_at.strftime("%Y-%m-%d %H:%M:%S"))
+        info.add_row("transport", "stdio")
+
+        config_snippet = Text()
+        config_snippet.append('{ "mcpServers": { "mem": { "command": "mem", "args": ["serve"] } } }',
+                               style=f"dim {ACCENT_YELLOW}")
+
+        hint = Text.assemble(
+            ("Claude Code  ", f"bold {ACCENT_ORANGE}"),
+            ("~/.claude/settings.json\n", "dim"),
+            ("", ""),
+        )
+
+        footer = Text.assemble(
+            ("Ctrl+C", f"bold {ACCENT_YELLOW}"),
+            (" to stop", "dim"),
+        )
+
+        return Group(
+            Align.center(_build_logo()),
+            Text(""),
+            Align.center(Panel(
+                Group(
+                    Align.center(status_line),
+                    Text(""),
+                    info,
+                    Text(""),
+                    hint,
+                    Align.center(config_snippet),
+                    Text(""),
+                    Align.center(footer),
+                ),
+                box=ROUNDED,
+                border_style=ACCENT_PINK,
+                title=Text("MCP server", style=f"bold {ACCENT_ORANGE}"),
+                padding=(0, 2),
+            )),
+        )
+
+    try:
+        with Live(_make_display(), console=console, refresh_per_second=1) as live:
+            while True:
+                time.sleep(1)
+                live.update(_make_display())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        state_store.clear()
+        console.print(Text.assemble(
+            ("\n  MCP server stopped.\n", f"dim {ACCENT_CORAL}"),
+        ))
+
+
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def serve() -> None:
     """[bold #E93A7D]Start[/] the local [bold #F98C2B]MCP server[/] over stdio.
@@ -746,8 +968,12 @@ def serve() -> None:
         }
       }
     """
-    from .mcp.server import run as _run_mcp
-    _run_mcp()
+    import sys
+    if sys.stdin.isatty():
+        _serve_tty()
+    else:
+        from .mcp.server import run as _run_mcp
+        _run_mcp()
 
 
 @app.command(rich_help_panel=f"[bold {ACCENT_YELLOW}]Other[/]")

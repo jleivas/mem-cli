@@ -42,6 +42,14 @@ def get_runtime_state_path() -> Path:
     return get_runtime_dir() / "state.json"
 
 
+def get_token_snapshot_path() -> Path:
+    return get_runtime_dir() / "token-snapshot.json"
+
+
+def get_mcp_state_path() -> Path:
+    return get_runtime_dir() / "mcp-state.json"
+
+
 def get_codex_jsonl_path() -> Path | None:
     value = os.environ.get(CODEX_JSONL_ENV_VAR)
     return Path(value).expanduser() if value else None

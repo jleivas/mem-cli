@@ -13,11 +13,11 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from ..app import build_monitor_service
 from ..config import get_runtime_state_path
 from ..services.memory_service import MemoryService
 from ..services.process_registry import ProcessRegistry
 from ..storage.runtime_state import RuntimeStateStore
+from ..storage.token_snapshot import TokenSnapshotStore
 
 mcp = FastMCP(
     "mem",
@@ -34,7 +34,6 @@ mcp = FastMCP(
 # ---------------------------------------------------------------------------
 
 _memory_svc: MemoryService | None = None
-_monitor_svc = None  # MonitorService, started on first snapshot request
 
 
 def _mem() -> MemoryService:
@@ -48,12 +47,8 @@ def _registry() -> ProcessRegistry:
     return ProcessRegistry(RuntimeStateStore(get_runtime_state_path()))
 
 
-def _get_monitor():
-    global _monitor_svc
-    if _monitor_svc is None:
-        _monitor_svc = build_monitor_service()
-        _monitor_svc.start()
-    return _monitor_svc
+def _snapshot_store() -> TokenSnapshotStore:
+    return TokenSnapshotStore()
 
 
 # ---------------------------------------------------------------------------
@@ -139,9 +134,12 @@ def memory_projects() -> list[dict[str, Any]]:
 
 @mcp.tool()
 def monitor_snapshot() -> list[dict[str, Any]]:
-    """Return the current token usage snapshot for all tracked agents."""
-    svc = _get_monitor()
-    statuses = svc.snapshot()
+    """Return the current token usage snapshot for all tracked agents.
+
+    Reads the snapshot written by the daemon (started with `mem start`).
+    Returns an empty list if the daemon is not running.
+    """
+    statuses = _snapshot_store().load()
     return [
         {
             "agent_name": s.agent_name,
@@ -209,5 +207,25 @@ def monitor_stop() -> dict[str, Any]:
 
 
 def run() -> None:
-    """Entry point: start the MCP server over stdio."""
-    mcp.run()
+    """Entry point: start the MCP server over stdio.
+
+    Registers the process PID in the MCP state file so that `mem status`
+    and `mem mcp-stop` can inspect and terminate it.
+    """
+    import os
+
+    from ..config import get_mcp_state_path
+    from ..storage.runtime_state import RuntimeState, RuntimeStateStore
+    from ..utils.time import utc_now
+
+    state_store = RuntimeStateStore(get_mcp_state_path())
+    state_store.save(RuntimeState(
+        running=True,
+        pid=os.getpid(),
+        started_at=utc_now(),
+        last_updated=utc_now(),
+    ))
+    try:
+        mcp.run()
+    finally:
+        state_store.clear()

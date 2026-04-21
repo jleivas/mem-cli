@@ -12,6 +12,7 @@ from .config import (
 )
 from .services.adapters import JsonlTokenSource, JsonlTokenSourceConfig
 from .services.monitor_service import MonitorService
+from .storage.token_snapshot import TokenSnapshotStore
 from .utils.logging import configure_logging
 
 
@@ -50,6 +51,7 @@ def _build_jsonl_source() -> JsonlTokenSource | None:
 def run_daemon() -> None:
     configure_logging()
     service = build_monitor_service()
+    snapshot_store = TokenSnapshotStore()
     service.start()
 
     stop_event = threading.Event()
@@ -62,6 +64,7 @@ def run_daemon() -> None:
 
     try:
         while not stop_event.wait(0.5):
-            pass
+            snapshot_store.save(service.snapshot())
     finally:
         service.stop()
+        snapshot_store.clear()
