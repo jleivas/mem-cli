@@ -223,6 +223,28 @@ def _render_action_screen(result: _ActionResult) -> Panel:
     )
 
 
+def _render_version_panel() -> Panel:
+    header = Text()
+    header.append("m", style=f"bold {ACCENT_PINK}")
+    header.append("e", style=f"bold {ACCENT_CORAL}")
+    header.append("m", style=f"bold {ACCENT_ORANGE}")
+    header.append("  ·  ", style="dim")
+    header.append("version", style=f"bold {ACCENT_YELLOW}")
+
+    body = Table.grid(padding=(0, 1))
+    body.add_row(Text("Package", style=f"bold {ACCENT_ORANGE}"), Text(APP_NAME, style="white"))
+    body.add_row(Text("Version", style=f"bold {ACCENT_ORANGE}"), Text(APP_VERSION, style=f"bold {ACCENT_YELLOW}"))
+    body.add_row(Text("Status", style=f"bold {ACCENT_ORANGE}"), Text("installed", style=f"bold {ACCENT_PINK}"))
+
+    return Panel(
+        body,
+        box=ROUNDED,
+        border_style=ACCENT_PINK,
+        title=header,
+        padding=(0, 1),
+    )
+
+
 def _render_action_layout(result: _ActionResult, message: str = "Press Enter to return to the menu.") -> Group:
     header = Panel(
         Text.assemble(
@@ -491,10 +513,13 @@ def dashboard(
     _launch_dashboard(normalized_view)
 
 
-@app.command(rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]")
+@app.command(
+    rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]",
+    help="Print the installed mem-cli version and exit.",
+)
 def version() -> None:
     """Print the current [bold #F7B500]version[/]."""
-    console.print(APP_VERSION)
+    console.print(_render_version_panel())
 
 
 # ---------------------------------------------------------------------------

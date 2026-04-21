@@ -1,5 +1,6 @@
 from typer.testing import CliRunner
 
+from mem import APP_NAME
 from mem import APP_VERSION
 from mem.cli import app
 from mem.cli import _run_menu
@@ -12,7 +13,16 @@ def test_version_command() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
+    assert APP_NAME in result.output
     assert APP_VERSION in result.output
+
+
+def test_help_lists_version_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "version" in result.output
+    assert "Print the installed mem-cli version and exit." in result.output
 
 
 def test_start_and_stop_commands(monkeypatch) -> None:
