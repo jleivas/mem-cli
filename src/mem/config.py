@@ -1,10 +1,37 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
+
 APP_NAME = "mem-cli"
-APP_VERSION = "0.1.0"
+
+
+def _version_from_changelog() -> str:
+    """Return the latest version from CHANGELOG.md, walking up from this file.
+
+    Falls back to importlib.metadata (for properly installed packages) and
+    then to a hardcoded sentinel if neither source is available.
+    """
+    current = Path(__file__).resolve().parent
+    for _ in range(6):
+        candidate = current / "CHANGELOG.md"
+        if candidate.exists():
+            text = candidate.read_text(encoding="utf-8")
+            match = re.search(r"^## \[(\d+\.\d+\.\d+)\]", text, re.MULTILINE)
+            if match:
+                return match.group(1)
+        current = current.parent
+
+    try:
+        from importlib.metadata import version as _meta_version
+        return _meta_version("mem-cli")
+    except Exception:
+        return "0.0.0"
+
+
+APP_VERSION = _version_from_changelog()
 HOME_ENV_VAR = "MEM_HOME"
 CODEX_JSONL_ENV_VAR = "MEM_CODEX_JSONL"
 CLAUDE_JSONL_ENV_VAR = "MEM_CLAUDE_JSONL"

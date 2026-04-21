@@ -1,26 +1,73 @@
 # mem-cli
 
-`mem-cli` is a local, open source, cross-platform CLI for token observability and agent memory.
+**mem-cli** is a local, open-source CLI tool that gives AI coding agents (Claude Code, Codex) two things they normally lack between sessions: **token usage visibility** and **persistent project memory**.
 
-- **Local monitor** — tracks token events from Claude and Codex
-- **Live dashboard** — real-time terminal view of token usage
-- **Project memory** — per-project memory with tagging and search
-- **MCP server** — exposes memory and observability as tools for any MCP-compatible agent
+Without mem-cli, every agent session starts blind — no memory of past decisions, no way to see how many tokens you've spent. mem-cli fixes both.
+
+---
+
+## What it does
+
+| Capability | What you get |
+|---|---|
+| **Project memory** | Store and retrieve facts scoped to a project directory. Works from the terminal or via MCP tools called directly by an agent. |
+| **Token monitor** | Background process that captures token events from Claude and Codex sessions as they happen. |
+| **Live dashboard** | Real-time terminal view of token usage per agent, updated as events arrive. |
+| **MCP server** | Exposes all memory and observability operations as MCP tools so any compatible agent can call them without running shell commands. |
+
+### How agent memory works
+
+```
+You open a project
+  └─ mem serve launches over stdio (registered as an MCP server)
+  └─ Agent calls memory_recall(cwd) → loads prior context
+
+During the session
+  └─ Agent calls memory_remember(...) → stores a fact
+  └─ Agent calls memory_forget(id) → removes a stale fact
+
+Next session, same project
+  └─ memory_recall returns everything that was stored — no manual copying needed
+```
+
+Memory is scoped to the project directory, stored locally in `~/.mem-cli/memory.db`, and never sent anywhere.
+
+---
+
+## Requirements
+
+- Python 3.11 or later
+- pip
 
 ---
 
 ## Installation
 
-Requires Python 3.11+.
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-org/mem-cli.git
+cd mem-cli
+```
+
+### 2. Install the package
 
 ```bash
 pip install -e .
 ```
 
-Development dependencies:
+This installs the `mem` command globally (within your Python environment).
+
+To also install development dependencies (pytest, etc.):
 
 ```bash
 pip install -e ".[dev]"
+```
+
+### 3. Verify the install
+
+```bash
+mem --version
 ```
 
 ---
@@ -28,13 +75,13 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```bash
-# Launch the interactive menu
+# Open the interactive menu (recommended first time)
 mem
 
-# Or use commands directly
-mem start        # start the background monitor
+# Or run commands directly
+mem start        # start the background token monitor
 mem dashboard    # open the live token dashboard
-mem status       # check monitor runtime state
+mem status       # check whether the monitor is running
 mem stop         # stop the monitor
 ```
 
@@ -42,10 +89,10 @@ mem stop         # stop the monitor
 
 ## Memory Commands
 
-Store and retrieve project-scoped memories from any terminal.
+Memories are scoped to the current working directory, so running `mem remember` inside a project stores context for that project only.
 
 ```bash
-# Store a memory (scoped to the current directory)
+# Store a memory for the current project
 mem remember "use postgres for all new services" --tag architecture
 
 # List all memories for this project
@@ -57,42 +104,27 @@ mem recall "postgres"
 # Filter by tag
 mem recall --tag architecture
 
-# Delete a memory
+# Delete a memory by ID
 mem forget <id>
 
 # List all projects that have memories
 mem projects
 
-# Initialize memories from an AI agent (Claude or Codex)
+# Auto-initialize memories from an AI agent (reads the repo and generates context)
 mem init
 mem init --agent claude
+mem init --agent codex
 ```
 
 ---
 
 ## MCP Server
 
-`mem serve` starts a local MCP server over stdio. It exposes all memory and
-observability operations as tools so agents can read and write project memories
-and inspect token usage without running shell commands.
+`mem serve` starts a local MCP server over stdio. Agents registered with it can call memory and observability operations as tools — no shell access required.
 
-### Available tools
+### Register with Claude Code
 
-| Tool | Description |
-|---|---|
-| `memory_remember` | Store a memory for a project |
-| `memory_recall` | List memories with optional query and tag filters |
-| `memory_forget` | Delete a memory by ID |
-| `memory_projects` | List all projects that have memories |
-| `monitor_snapshot` | Current token usage snapshot for all tracked agents |
-| `monitor_status` | Runtime state of the background monitor process |
-| `monitor_start` | Start the background monitor |
-| `monitor_stop` | Stop the background monitor |
-
-### Registering with Claude Code
-
-Add the following to your Claude Code `settings.json`
-(`~/.claude/settings.json` or the workspace-level `.claude/settings.json`):
+Add the following to `~/.claude/settings.json` (or a workspace-level `.claude/settings.json`):
 
 ```json
 {
@@ -105,26 +137,7 @@ Add the following to your Claude Code `settings.json`
 }
 ```
 
-Then restart Claude Code. The `mem` tools will appear automatically when an
-agent calls any `mem.*` tool.
-
-### Registering with a custom MCP client
-
-The server speaks the MCP stdio transport, so any MCP-compatible host can
-launch it the same way:
-
-```json
-{
-  "mcpServers": {
-    "mem": {
-      "command": "mem",
-      "args": ["serve"]
-    }
-  }
-}
-```
-
-If `mem` is not in `PATH`, use the full path to the executable:
+If `mem` is not in your `PATH` (e.g. inside a virtualenv), use the full path:
 
 ```json
 {
@@ -137,18 +150,36 @@ If `mem` is not in `PATH`, use the full path to the executable:
 }
 ```
 
-### Running the server manually (for debugging)
+Restart Claude Code after editing the file. The `mem.*` tools will be available automatically.
+
+### Register with any MCP-compatible client
+
+The server speaks the MCP stdio transport. Use the same JSON block above with any host that supports it.
+
+### Run the server manually (debugging)
 
 ```bash
 mem serve
 ```
 
-The server blocks and communicates over stdin/stdout. You can use the
-[MCP Inspector](https://github.com/modelcontextprotocol/inspector) to test it:
+The server blocks and communicates over stdin/stdout. To test it interactively:
 
 ```bash
 npx @modelcontextprotocol/inspector mem serve
 ```
+
+### Available MCP tools
+
+| Tool | Description |
+|---|---|
+| `memory_remember` | Store a memory for a project |
+| `memory_recall` | List memories with optional query and tag filters |
+| `memory_forget` | Delete a memory by ID |
+| `memory_projects` | List all projects that have memories |
+| `monitor_snapshot` | Current token usage snapshot for all tracked agents |
+| `monitor_status` | Runtime state of the background monitor process |
+| `monitor_start` | Start the background monitor |
+| `monitor_stop` | Stop the background monitor |
 
 ### Tool reference
 
@@ -234,94 +265,11 @@ Both return `{ "ok": true|false, "pid"?, "started_at"?, "error"? }`.
 
 ---
 
-## Agent Hooks
+## Token Capture Setup
 
-Hook scripts for token capture live in the `hooks/` directory.
+### Claude Code
 
-| Script | Agent | Purpose |
-|---|---|---|
-| `claude-mem.sh` | Claude Code | Capture token usage at session end |
-| `codex-mem.py` | Codex CLI | Capture token usage (background watcher) |
-
-Memory management for Claude Code is handled entirely through the MCP server — no hooks needed.
-
----
-
-## Claude Code — Memory via MCP
-
-Claude Code reads and writes project memories through the `mem` MCP server. No shell hooks or
-scripts are needed for memory management — the MCP tools are the single interface.
-
-### How it works
-
-```
-Claude Code starts
-  └─ Launches mem serve over stdio (registered in mcpServers)
-  └─ mem.* tools available from turn one
-
-First turn in a project
-  └─ Claude calls memory_recall(cwd="$PWD") to load stored context
-
-During the session
-  └─ Claude calls memory_remember(...) when it learns something worth keeping
-  └─ Claude calls memory_forget(id) when a memory is stale or wrong
-
-No hooks, no scripts, no injected context — MCP handles everything.
-```
-
-### 1. Register the MCP server in `~/.claude/settings.json`
-
-```json
-{
-  "mcpServers": {
-    "mem": {
-      "command": "mem",
-      "args": ["serve"]
-    }
-  }
-}
-```
-
-If `mem` is not in `PATH`, use the full executable path:
-
-```json
-{
-  "mcpServers": {
-    "mem": {
-      "command": "/path/to/mem",
-      "args": ["serve"]
-    }
-  }
-}
-```
-
-Restart Claude Code after editing the file.
-
-### 2. Generate AGENTS.md and sync CLAUDE.md
-
-Run `mem config` inside your project:
-
-```bash
-# Generate the synced project pair: AGENTS.md + CLAUDE.md
-mem config
-
-# Generate the sync pair using Claude as the authoring agent
-mem config --agent claude
-
-# Generate the sync pair using Codex as the authoring agent
-mem config --agent codex
-
-```
-
-`mem config` asks the selected agent to generate or update `AGENTS.md` dynamically from the
-current repository context. `AGENTS.md` is the canonical file, and `CLAUDE.md` is created as a
-symlink to it. The generated content keeps shared instructions plus Claude-only and Codex-only
-sections when needed, and includes the `mem` MCP workflow: `memory_recall`, `memory_remember`,
-and `memory_forget`.
-
-### 3. Token capture hook (optional)
-
-The only hook needed is for token tracking. Install `claude-mem.sh` as a `Stop` hook:
+The background monitor picks up token events automatically when the hook is installed.
 
 ```bash
 mkdir -p ~/.mem-cli/hooks
@@ -348,17 +296,13 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-> **Token capture for Codex:** use `hooks/codex-mem.py` as a background
-> watcher. It polls `~/.codex/sessions/` and writes token events to
-> `~/.mem-cli/codex.jsonl`. See [`tokens-tracker.md`](tokens-tracker.md)
-> for setup instructions.
+### Codex
 
----
+Use `hooks/codex-mem.py` as a background watcher. It polls `~/.codex/sessions/` and writes token events to `~/.mem-cli/codex.jsonl`. See [`tokens-tracker.md`](tokens-tracker.md) for full setup instructions.
 
-## Token Data Sources
+### Manual / environment variables
 
-Set environment variables to point `mem-cli` at local JSONL files written by
-your agent CLIs:
+You can point mem-cli at any JSONL file written by your agent:
 
 | Variable | Description |
 |---|---|
@@ -369,27 +313,35 @@ your agent CLIs:
 Example:
 
 ```bash
-mkdir -p "$HOME/.mem-cli"
 export MEM_CLAUDE_JSONL="$HOME/.mem-cli/claude.jsonl"
 export MEM_CODEX_JSONL="$HOME/.mem-cli/codex.jsonl"
 mem dashboard --view both
 ```
 
-To capture Claude Code output into the expected file:
+To pipe Claude output directly into the expected file:
 
 ```bash
 claude -p "hello" --verbose --output-format stream-json \
   | tee -a "$HOME/.mem-cli/claude.jsonl"
 ```
 
-For full capture setup, see [`tokens-tracker.md`](tokens-tracker.md).
+---
+
+## Project Setup for an Agent (AGENTS.md / CLAUDE.md)
+
+Run `mem config` inside a project to generate `AGENTS.md` and a `CLAUDE.md` symlink. These files instruct the agent on how to use mem-cli tools within that project.
+
+```bash
+mem config                 # auto-detect agent
+mem config --agent claude  # use Claude as the authoring agent
+mem config --agent codex   # use Codex as the authoring agent
+```
 
 ---
 
 ## Runtime State
 
-`mem` stores minimal runtime state in `~/.mem-cli/` by default. The directory
-is small and safe to delete when the monitor is stopped.
+mem-cli stores minimal runtime state in `~/.mem-cli/`. The directory is safe to delete when the monitor is stopped.
 
 ---
 
@@ -408,6 +360,8 @@ src/mem/
   ui/              # live dashboard
   utils/           # logging, time helpers
 tests/             # pytest suite
+hooks/             # shell/Python hook scripts for Claude and Codex
+docs/              # architecture notes, roadmap, ASCII logo
 ```
 
 ---
@@ -415,3 +369,7 @@ tests/             # pytest suite
 ## Roadmap
 
 See [`docs/roadmap.md`](docs/roadmap.md).
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md).
