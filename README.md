@@ -64,11 +64,35 @@ To also install development dependencies (pytest, etc.):
 pip install -e ".[dev]"
 ```
 
+That also installs the build tooling used to create release artifacts.
+The release helpers live under `scripts/` and are not part of the installed
+`mem` runtime package.
+
 ### 3. Verify the install
 
 ```bash
 mem --version
 ```
+
+---
+
+## Build And Release
+
+The release flow is intentionally simple:
+
+```bash
+python scripts/sync_version.py
+python scripts/release_build.py
+```
+
+This produces both:
+
+- `dist/*.tar.gz` source distributions
+- `dist/*.whl` wheel distributions
+
+The build script clears old artifacts first, then rebuilds both formats from the
+current checkout. These scripts are release-only helpers; they are not shipped
+inside the `mem` package.
 
 ---
 
