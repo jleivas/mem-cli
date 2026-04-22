@@ -20,6 +20,7 @@ from .config import get_default_codex_jsonl_path
 from .config import get_mcp_state_path
 from .config import get_runtime_state_path
 from .app import build_monitor_service
+from .services.adapters import discover_token_source_plugins
 from .services.memory_service import MemoryService
 from .services.prompt_service import (
     AgentResult,
@@ -1424,6 +1425,31 @@ def serve() -> None:
     else:
         from .mcp.server import run as _run_mcp
         _run_mcp()
+
+
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def adapters() -> None:
+    """List available token source adapters and discovered plugins."""
+    table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
+    table.add_column("Name", style=f"bold {ACCENT_YELLOW}", no_wrap=True)
+    table.add_column("Kind", style=ACCENT_ORANGE, no_wrap=True)
+    table.add_column("Source", style="white", ratio=2)
+
+    table.add_row("jsonl", "built-in", "Local JSON/JSONL token files")
+    table.add_row("simulated", "built-in", "Local demo source for the dashboard")
+
+    plugins = discover_token_source_plugins()
+    if plugins:
+        for plugin in plugins:
+            table.add_row(plugin.name, "plugin", plugin.entry_point)
+    else:
+        table.add_row("-", "plugin", "No external token source plugins discovered")
+
+    console.print(_render_action_screen(_ActionResult(
+        title="Token source adapters",
+        body=table,
+        border_style=ACCENT_PINK,
+    )))
 
 
 @app.command(rich_help_panel=f"[bold {ACCENT_YELLOW}]Other[/]")

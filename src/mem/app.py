@@ -11,16 +11,21 @@ from .config import (
     get_jsonl_paths,
 )
 from .services.adapters import JsonlTokenSource, JsonlTokenSourceConfig
+from .services.adapters import build_token_source_pipeline
+from .services.adapters import discover_token_source_plugins
 from .services.monitor_service import MonitorService
 from .storage.token_snapshot import TokenSnapshotStore
 from .utils.logging import configure_logging
 
 
 def build_monitor_service() -> MonitorService:
-    jsonl_paths = _build_jsonl_source()
-    if jsonl_paths is None:
+    token_source = build_token_source_pipeline(
+        _build_jsonl_source(),
+        *_load_plugin_sources(),
+    )
+    if token_source is None:
         return MonitorService()
-    return MonitorService(token_source=jsonl_paths)
+    return MonitorService(token_source=token_source)
 
 
 def _build_jsonl_source() -> JsonlTokenSource | None:
@@ -46,6 +51,10 @@ def _build_jsonl_source() -> JsonlTokenSource | None:
         return None
 
     return JsonlTokenSource(JsonlTokenSourceConfig(paths_by_agent=paths_by_agent))
+
+
+def _load_plugin_sources():
+    return tuple(plugin.source for plugin in discover_token_source_plugins())
 
 
 def run_daemon() -> None:

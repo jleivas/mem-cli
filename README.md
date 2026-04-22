@@ -30,7 +30,9 @@ Next session, same project
   └─ memory_recall returns everything that was stored — no manual copying needed
 ```
 
-Memory is scoped to the project directory, stored locally in `~/.mem-cli/memory.db`, and never sent anywhere.
+Memory is scoped to the project directory, stored locally under the mem app home
+directory, and never sent anywhere. By default this is `~/.mem-cli/` on Unix-like
+systems and `%LOCALAPPDATA%\\mem-cli\\` on Windows unless `MEM_HOME` is set.
 
 ---
 
@@ -52,6 +54,8 @@ cd mem-cli
 
 ### 2. Install the package
 
+For local development:
+
 ```bash
 pip install -e .
 ```
@@ -67,6 +71,18 @@ pip install -e ".[dev]"
 That also installs the build tooling used to create release artifacts.
 The release helpers live under `scripts/` and are not part of the installed
 `mem` runtime package.
+
+For an isolated end-user install, `pipx` is the preferred path:
+
+```bash
+pipx install .
+```
+
+You can also install a released wheel artifact directly:
+
+```bash
+pipx install dist/mem_cli-0.1.0-py3-none-any.whl
+```
 
 ### 3. Verify the install
 
@@ -93,6 +109,31 @@ This produces both:
 The build script clears old artifacts first, then rebuilds both formats from the
 current checkout. These scripts are release-only helpers; they are not shipped
 inside the `mem` package.
+
+For multiplatform verification, the repository also includes a release workflow
+that builds on Linux, macOS, and Windows, then installs the generated wheel and
+checks `mem --version` on each platform.
+
+---
+
+## Adapters And Plugins
+
+`mem` discovers external token source adapters through Python entry points in
+the `mem.token_sources` group.
+
+To inspect the available adapters for the current installation, run:
+
+```bash
+mem adapters
+```
+
+Built-in adapters include:
+
+- `jsonl` for local JSON/JSONL token files
+- `simulated` for demo and dashboard usage
+
+External plugins should expose a zero-argument factory that returns a
+`TokenSource`. The monitor will compose built-in and discovered sources.
 
 ---
 
@@ -365,7 +406,8 @@ mem config --agent codex   # use Codex as the authoring agent
 
 ## Runtime State
 
-mem-cli stores minimal runtime state in `~/.mem-cli/`. The directory is safe to delete when the monitor is stopped.
+mem-cli stores minimal runtime state in the mem app home directory. The
+directory is safe to delete when the monitor is stopped.
 
 ---
 

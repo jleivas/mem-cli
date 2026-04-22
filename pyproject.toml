@@ -12,11 +12,26 @@ license = { text = "MIT" }
 authors = [
   { name = "mem-cli contributors" }
 ]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+  "Environment :: Console",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["ai", "cli", "memory", "tokens", "observability"]
 dependencies = [
   "typer>=0.15.0",
   "rich==13.9.4",
   "mcp>=1.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/your-org/mem-cli"
+Repository = "https://github.com/your-org/mem-cli"
+Issues = "https://github.com/your-org/mem-cli/issues"
 
 [project.optional-dependencies]
 dev = [

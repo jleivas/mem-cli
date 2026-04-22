@@ -11,11 +11,27 @@ CLAUDE_JSONL_ENV_VAR = "MEM_CLAUDE_JSONL"
 JSONL_PATHS_ENV_VAR = "MEM_JSONL_PATHS"
 
 
+def _default_app_home(
+    platform_name: str | None = None,
+    home_dir: Path | None = None,
+    local_app_data: str | None = None,
+) -> Path:
+    platform = platform_name or os.name
+    home = home_dir or Path.home()
+    local_data = local_app_data or os.environ.get("LOCALAPPDATA")
+
+    if platform == "nt":
+        if local_data:
+            return Path(local_data).expanduser() / APP_NAME
+        return home / "AppData" / "Local" / APP_NAME
+    return home / ".mem-cli"
+
+
 def get_app_home() -> Path:
     custom_home = os.environ.get(HOME_ENV_VAR)
     if custom_home:
         return Path(custom_home).expanduser()
-    return Path.home() / ".mem-cli"
+    return _default_app_home()
 
 
 def ensure_app_home() -> Path:

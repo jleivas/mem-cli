@@ -35,6 +35,7 @@ The current codebase is intentionally structured for these later stages:
 3. local MCP server
 4. multiple adapters for different agents
 5. local file and stream adapters for different agent runtimes
+6. external token source plugins discovered through entry points
 
 ## Near-Term Design Constraints
 
