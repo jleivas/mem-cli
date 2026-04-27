@@ -5,8 +5,8 @@ from mem.ui.dashboard import build_detail_table, build_summary_panel, render_das
 
 def _snapshot():
     tracker = TokenTracker()
-    tracker.register_event(TokenEvent(agent_name="codex", input_tokens=12, output_tokens=24, source="simulated"))
-    tracker.register_event(TokenEvent(agent_name="claude", input_tokens=4, output_tokens=8, source="simulated"))
+    tracker.register_event(TokenEvent(agent_name="codex", input_tokens=12, output_tokens=24, source="jsonl"))
+    tracker.register_event(TokenEvent(agent_name="claude", input_tokens=4, output_tokens=8, source="jsonl"))
     return tracker.snapshot()
 
 

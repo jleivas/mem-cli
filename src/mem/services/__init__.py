@@ -2,7 +2,7 @@
 
 from .adapters import JsonlTokenSource, JsonlTokenSourceConfig
 from .memory_service import MemoryService
-from .monitor_service import CompositeTokenSource, MonitorService, SimulatedTokenSource
+from .monitor_service import CompositeTokenSource, MonitorService
 from .process_registry import ProcessRegistry
 from .token_tracker import TokenTracker
 
@@ -13,6 +13,5 @@ __all__ = [
     "MemoryService",
     "MonitorService",
     "ProcessRegistry",
-    "SimulatedTokenSource",
     "TokenTracker",
 ]

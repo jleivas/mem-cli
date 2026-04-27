@@ -13,7 +13,7 @@ class _AgentTotals:
     total_tokens: int = 0
     record_count: int = 0
     last_updated: str = ""
-    source: str = "simulated"
+    source: str = "unknown"
     state: str = "active"
 
 

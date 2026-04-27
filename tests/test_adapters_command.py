@@ -16,5 +16,4 @@ def test_adapters_command_lists_builtin_adapters(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert "jsonl" in result.output
-    assert "simulated" in result.output
     assert "No external token source plugins discovered" in result.output

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import itertools
-import random
 import threading
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 from ..models import TokenEvent
@@ -21,29 +19,6 @@ class TokenSource(Protocol):
 class NullTokenSource:
     def poll(self) -> Iterable[TokenEvent]:
         return ()
-
-
-@dataclass(slots=True)
-class SimulatedTokenSource:
-    agents: tuple[str, ...] = ("codex", "claude", "local-agent")
-    seed: int | None = None
-    _rng: random.Random = field(init=False, repr=False)
-    _cycle: Iterable[str] = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self._rng = random.Random(self.seed)
-        self._cycle = itertools.cycle(self.agents)
-
-    def poll(self) -> Iterable[TokenEvent]:
-        agent_name = next(self._cycle)
-        input_tokens = self._rng.randint(8, 64)
-        output_tokens = self._rng.randint(16, 96)
-        yield TokenEvent(
-            agent_name=agent_name,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            source="simulated",
-        )
 
 
 @dataclass(slots=True)
@@ -103,6 +78,5 @@ __all__ = [
     "CompositeTokenSource",
     "MonitorService",
     "NullTokenSource",
-    "SimulatedTokenSource",
     "TokenSource",
 ]

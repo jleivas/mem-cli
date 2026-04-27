@@ -13,7 +13,7 @@ class TokenEvent:
     output_tokens: int
     total_tokens: int = field(init=False)
     timestamp: datetime = field(default_factory=utc_now)
-    source: str = "simulated"
+    source: str = "unknown"
 
     def __post_init__(self) -> None:
         if self.input_tokens < 0 or self.output_tokens < 0:
