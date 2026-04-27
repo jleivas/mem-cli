@@ -46,6 +46,8 @@ def test_config_command_writes_synced_pair(monkeypatch, tmp_path) -> None:
     assert claude_text == agents_text
     assert "AGENTS.md" in prompts[0]
     assert "CLAUDE.md is a symlink to AGENTS.md" in prompts[0]
+    assert "Do not create any extra markdown files." in prompts[0]
+    assert "Only touch AGENTS.md and CLAUDE.md." in prompts[0]
     assert "memory_recall" in prompts[0]
     assert "backend service" in prompts[0]
     assert "frontend app" in prompts[0]

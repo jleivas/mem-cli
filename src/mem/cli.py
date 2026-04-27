@@ -1143,8 +1143,6 @@ def init(
                     break
                 console.print("  Invalid choice, try again.", style="red")
 
-    _run_config_preflight(chosen, cwd=resolved_cwd)
-
     # ------------------------------------------------------------------ #
     # 3. Check if project already has memories                            #
     # ------------------------------------------------------------------ #
@@ -1309,6 +1307,8 @@ Goal:
 - Generate the final AGENTS.md content only.
 - Update the file if it exists, or create it if it does not.
 - Keep CLAUDE.md as a symlink to AGENTS.md. Do not put divergent content in CLAUDE.md.
+- Do not create any extra markdown files.
+- Only touch AGENTS.md and CLAUDE.md.
 
 Rules:
 - Output markdown only. No code fences. No explanation.
@@ -1455,10 +1455,6 @@ def _append_or_replace_mcp_block(content: str) -> str:
         return updated.rstrip() + "\n"
 
     return text + "\n\n" + block + "\n"
-
-
-def _run_config_preflight(agent: str, cwd: str | None = None) -> None:
-    config(agent=agent or "all", cwd=cwd or "")
 
 
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")

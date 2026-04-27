@@ -227,9 +227,6 @@ def test_submenu_renders_horizontal_cards() -> None:
 def test_init_runs_config_before_agent_work(monkeypatch, tmp_path) -> None:
     calls: list[str] = []
 
-    def fake_config(agent: str, cwd: str = "") -> None:
-        calls.append(f"config:{agent}:{cwd}")
-
     def fake_run_agent(prompt: str, agent: str, on_line=None):
         calls.append(f"agent:{agent}")
         if on_line is not None:
@@ -249,7 +246,6 @@ def test_init_runs_config_before_agent_work(monkeypatch, tmp_path) -> None:
             calls.append(f"remember:{content}")
             return None
 
-    monkeypatch.setattr("mem.cli.config", fake_config)
     monkeypatch.setattr("mem.cli.run_agent", fake_run_agent)
     monkeypatch.setattr("mem.services.memory_service.MemoryService", lambda: FakeMemoryService())
     monkeypatch.setattr("mem.cli.detect_available_agents", lambda: ["claude"])
@@ -272,6 +268,34 @@ def test_init_runs_config_before_agent_work(monkeypatch, tmp_path) -> None:
     from mem.cli import init as run_init
 
     run_init(agent="claude", cwd=str(tmp_path))
-    assert calls[0].startswith("config:claude:")
-    assert calls[1] == "agent:claude"
-    assert calls[2] == "remember:remembered fact"
+    assert calls[0] == "agent:claude"
+    assert calls[1] == "remember:remembered fact"
+
+
+def test_config_command_handles_agent_files(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+
+    def fake_detect_available_agents():
+        return ["claude"]
+
+    def fake_config_mode():
+        return "mcp-only"
+
+    def fake_write_text(path, content):
+        calls.append(f"write:{path.name}")
+        return True
+
+    def fake_is_claude_synced_to_agents(claude_path, agents_path):
+        return False
+
+    monkeypatch.setattr("mem.cli.detect_available_agents", fake_detect_available_agents)
+    monkeypatch.setattr("mem.cli._select_config_mode", fake_config_mode)
+    monkeypatch.setattr("mem.cli._write_text", fake_write_text)
+    monkeypatch.setattr("mem.cli._is_claude_synced_to_agents", fake_is_claude_synced_to_agents)
+    monkeypatch.setattr("mem.cli._sync_claude_symlink", lambda claude_path, agents_path: calls.append("sync"))
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["config", "--agent", "claude", "--cwd", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert any(call.startswith("write:") for call in calls)
