@@ -52,6 +52,11 @@ app = typer.Typer(
     rich_markup_mode="rich",
     help="[bold #E93A7D]Mem CLI[/] for AI agents — [dim]local token observability & memory.[/dim]",
 )
+serve_app = typer.Typer(
+    add_completion=False,
+    rich_markup_mode="rich",
+    help="[bold #E93A7D]Start[/] the local [bold #F98C2B]MCP server[/] over stdio.",
+)
 console = Console()
 CLI_NAME = "mem"
 ACCENT_PINK = "#E93A7D"
@@ -101,6 +106,8 @@ _FOOTER_MEMORY = [
     ("4", " Stop MCP  ",  ACCENT_CORAL),
     ("0", " Back",        "dim white"),
 ]
+
+app.add_typer(serve_app, name="serve", rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 
 
 @dataclass(slots=True)
@@ -480,15 +487,8 @@ def _status_action() -> _ActionResult:
 
 
 def _mcp_stop_action() -> _ActionResult:
-    removed = remove_launch_agent()
     state = _mcp_registry().stop()
     if state is None:
-        if removed:
-            return _ActionResult(
-                title="MCP server stopped",
-                body=Panel.fit("MCP autostart disabled.", border_style=ACCENT_CORAL),
-                border_style=ACCENT_CORAL,
-            )
         return _ActionResult(
             title="Stop MCP server",
             body=Panel.fit("No running MCP server found.", border_style=ACCENT_YELLOW),
@@ -497,8 +497,6 @@ def _mcp_stop_action() -> _ActionResult:
     table = Table.grid(padding=(0, 1))
     table.add_row(Text("Stopped", style=f"bold {ACCENT_YELLOW}"), Text("MCP server halted", style="green"))
     table.add_row(Text("PID", style=f"bold {ACCENT_CORAL}"), Text(str(state.pid), style="white"))
-    if removed:
-        table.add_row(Text("Autostart", style=f"bold {ACCENT_CORAL}"), Text("disabled", style="green"))
     return _ActionResult(title="MCP server stopped", body=table, border_style=ACCENT_CORAL)
 
 
@@ -1311,13 +1309,6 @@ def init(
         raise typer.Exit(code=result.exit_code)
 
 
-@app.command(name="mcp-stop", rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
-def mcp_stop() -> None:
-    """[bold #F25C5C]Stop[/] the local MCP server process."""
-    result = _mcp_stop_action()
-    console.print(_render_action_screen(result))
-
-
 # ---------------------------------------------------------------------------
 # Config command — generate AGENTS.md and sync CLAUDE.md as a symlink
 # ---------------------------------------------------------------------------
@@ -1810,8 +1801,9 @@ def _serve_tty() -> None:
         ))
 
 
-@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+@serve_app.callback(invoke_without_command=True)
 def serve(
+    ctx: typer.Context,
     autostart: bool = typer.Option(
         False,
         "--autostart",
@@ -1847,6 +1839,14 @@ def serve(
       }
     """
     import sys
+    if ctx.invoked_subcommand is not None:
+        selected_modes = [autostart, disable_autostart, background, new_terminal]
+        if any(selected_modes):
+            raise typer.BadParameter(
+                "Choose only one of --autostart, --disable-autostart, --background, or --new-terminal."
+            )
+        return
+
     selected_modes = [autostart, disable_autostart, background, new_terminal]
     if sum(1 for mode in selected_modes if mode) > 1:
         raise typer.BadParameter(
@@ -1854,7 +1854,7 @@ def serve(
         )
     if not (autostart or disable_autostart) and _mcp_server_is_running():
         console.print(Panel.fit(
-            "MCP server is already running. Stop it with `mem mcp-stop` before starting a new one.",
+            "MCP server is already running. Stop it with `mem serve stop` before starting a new one.",
             border_style=ACCENT_ORANGE,
         ))
         raise typer.Exit(code=1)
@@ -1918,7 +1918,7 @@ def serve(
                 Text.assemble(
                     ("The MCP server is now running detached from this terminal.", "dim"),
                     ("\nUse ", "white"),
-                    ("mem mcp-stop", f"bold {ACCENT_YELLOW}"),
+                    ("mem serve stop", f"bold {ACCENT_YELLOW}"),
                     (" to stop it.", "white"),
                 ),
                 border_style=ACCENT_PINK,
@@ -1954,6 +1954,13 @@ def serve(
         _run_mcp()
 
 
+@serve_app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def stop() -> None:
+    """[bold #F25C5C]Stop[/] the local MCP server process."""
+    result = _mcp_stop_action()
+    console.print(_render_action_screen(result))
+
+
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def setup() -> None:
     """Enable autostart and start the MCP server now on supported platforms."""
@@ -1965,13 +1972,28 @@ def setup() -> None:
         raise typer.Exit(code=1)
 
     autostart_path = install_launch_agent()
+    log_path = _mcp_serve_log_path()
+    _process = start_hidden_mcp_server(stderr_log_path=log_path)
+    if not _wait_for_mcp_server_running():
+        trace = _tail_text(log_path)
+        console.print(Panel.fit(
+            Text.assemble(
+                ("MCP setup enabled autostart, but the server failed to start.\n", "white"),
+                ("See log: ", "dim"),
+                (str(log_path), f"bold {ACCENT_YELLOW}"),
+                ("\n", ""),
+                (trace or "No error trace was captured.", "red"),
+            ),
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
     console.print(_render_action_screen(_ActionResult(
         title="MCP setup complete",
         body=Panel.fit(
             Text.assemble(
                 ("Autostart enabled at ", "white"),
                 (str(autostart_path), f"bold {ACCENT_YELLOW}"),
-                ("\nThe MCP server has been started or scheduled to start immediately.", "dim"),
+                ("\nThe MCP server is now running and will start automatically at login.", "dim"),
             ),
             border_style=ACCENT_PINK,
         ),

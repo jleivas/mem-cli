@@ -19,7 +19,7 @@ Use this skill when changing or debugging `mem serve`, `mem status`, or the MCP 
 
 When a server is already running, show this exact English message:
 
-`MCP server is already running. Stop it with \`mem mcp-stop\` before starting a new one.`
+`MCP server is already running. Stop it with \`mem serve stop\` before starting a new one.`
 
 ## Implementation Notes
 

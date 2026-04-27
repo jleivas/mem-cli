@@ -210,7 +210,7 @@ def run() -> None:
     """Entry point: start the MCP server over stdio.
 
     Registers the process PID in the MCP state file so that `mem status`
-    and `mem mcp-stop` can inspect and terminate it.
+    and `mem serve stop` can inspect and terminate it.
     """
     import os
 

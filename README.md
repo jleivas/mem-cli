@@ -160,9 +160,11 @@ This creates an OS-specific startup item and starts the MCP server now:
 To stop the server and disable autostart:
 
 ```bash
-mem mcp-stop
+mem serve stop
 ```
 
+Use `mem serve --disable-autostart` if you want to turn off autostart.
+Use `mem serve stop` to stop the MCP server without changing autostart.
 You can re-enable it later with `mem setup` or `mem serve --autostart`.
 
 ---

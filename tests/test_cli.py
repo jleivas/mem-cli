@@ -45,6 +45,7 @@ def test_serve_help_lists_launch_options() -> None:
     assert "--background" in result.output
     assert "--new-terminal" in result.output
     assert "--autostart" in result.output
+    assert "stop" in result.output
 
 
 def test_serve_autostart_option_invokes_installer(monkeypatch) -> None:
@@ -79,6 +80,36 @@ def test_serve_disable_autostart_option_invokes_remover(monkeypatch) -> None:
     assert result.exit_code == 0
     assert called["remove"] is True
     assert "MCP autostart disabled" in result.output
+
+
+def test_mcp_stop_only_stops_running_server(monkeypatch) -> None:
+    called = {"stop": False, "remove": False}
+
+    class FakeState:
+        pid = 321
+        running = True
+        started_at = None
+        last_updated = None
+
+    class FakeRegistry:
+        def stop(self):
+            called["stop"] = True
+            return FakeState()
+
+    def fake_remove_launch_agent():
+        called["remove"] = True
+        return True
+
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: FakeRegistry())
+    monkeypatch.setattr("mem.cli.remove_launch_agent", fake_remove_launch_agent)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "stop"])
+
+    assert result.exit_code == 0
+    assert called["stop"] is True
+    assert called["remove"] is False
+    assert "MCP server stopped" in result.output
 
 
 def test_serve_background_option_invokes_detached_launcher(monkeypatch) -> None:
@@ -140,22 +171,35 @@ def test_serve_refuses_to_start_when_mcp_is_already_running(monkeypatch) -> None
 
     assert result.exit_code != 0
     assert "already running" in result.output
+    assert "mem serve stop" in result.output
 
 
 def test_setup_command_invokes_installer(monkeypatch) -> None:
-    called = {"install": False}
+    called = {"install": False, "start": False}
 
     def fake_install_launch_agent():
         called["install"] = True
         return "/tmp/com.mem.cli.mcp.plist"
 
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    def fake_start_hidden_mcp_server(program=None, platform_name=None, stderr_log_path=None):
+        called["start"] = True
+        return FakeProcess()
+
     monkeypatch.setattr("mem.cli.install_launch_agent", fake_install_launch_agent)
+    monkeypatch.setattr("mem.cli.start_hidden_mcp_server", fake_start_hidden_mcp_server)
+    monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: Path("/tmp/mem-serve.stderr.log"))
+    monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: True)
 
     runner = CliRunner()
     result = runner.invoke(app, ["setup"])
 
     assert result.exit_code == 0
     assert called["install"] is True
+    assert called["start"] is True
     assert "MCP setup complete" in result.output
 
 
