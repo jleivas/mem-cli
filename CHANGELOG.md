@@ -33,3 +33,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Environment variable overrides: `MEM_CLAUDE_JSONL`, `MEM_CODEX_JSONL`, `MEM_JSONL_PATHS`
 - Runtime state stored in `~/.mem-cli/`
 - MIT license
+
+### Fixed
+
+- `mem serve --autostart` no longer prints `Boot-out failed: 5: Input/output error` on macOS when the LaunchAgent was not previously loaded. `launchctl bootout` stderr is now suppressed because errors are expected on a first install.

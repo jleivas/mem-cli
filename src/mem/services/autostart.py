@@ -224,7 +224,13 @@ def install_autostart(
     if platform == "darwin":
         autostart_file.write_bytes(plistlib.dumps(payload))  # type: ignore[arg-type]
         user_id = uid if uid is not None else os.getuid()
-        subprocess.run(["launchctl", "bootout", f"gui/{user_id}", str(autostart_file)], check=False)
+        # bootout is a best-effort "stop if loaded" step — errors are expected when the
+        # service was never bootstrapped, so suppress stderr to avoid alarming the user.
+        subprocess.run(
+            ["launchctl", "bootout", f"gui/{user_id}", str(autostart_file)],
+            check=False,
+            stderr=subprocess.DEVNULL,
+        )
         subprocess.run(["launchctl", "bootstrap", f"gui/{user_id}", str(autostart_file)], check=True)
         return autostart_file
 
