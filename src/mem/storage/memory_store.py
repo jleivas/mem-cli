@@ -160,6 +160,11 @@ class MemoryStore:
         matches = [m for m in self._read_all(project) if needle in (t.lower() for t in m.tags)]
         return sorted(matches, key=lambda m: m.timestamp, reverse=True)
 
+    def replace_all(self, project: str, memories: list[Memory]) -> None:
+        """Overwrite all memories for a project with *memories*."""
+        self._ensure_project_dir(project)
+        self._write_all(project, memories)
+
     def list_projects(self) -> list[dict[str, Any]]:
         """Return metadata for all projects that have memories, sorted by name."""
         results: list[dict[str, Any]] = []

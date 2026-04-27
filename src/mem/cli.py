@@ -20,6 +20,7 @@ from .config import get_default_codex_jsonl_path
 from .config import get_mcp_state_path
 from .config import get_runtime_state_path
 from .app import build_monitor_service
+from .models.memory import Memory
 from .services.adapters import discover_token_source_plugins
 from .services.memory_service import MemoryService
 from .services.prompt_service import (
@@ -671,6 +672,233 @@ def projects() -> None:
     console.print(_render_action_screen(_ActionResult(
         title="Projects",
         body=table,
+        border_style=ACCENT_PINK,
+    )))
+
+
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def compress(
+    agent: str = typer.Option(
+        "",
+        "--agent",
+        "-a",
+        help="Agent to use: 'claude' or 'codex'. Auto-detects if omitted.",
+    ),
+    cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+) -> None:
+    """[bold #E93A7D]Compress[/] project memories using an [bold #F98C2B]AI agent[/].
+
+    Merges redundant or overlapping memories into a smaller, denser set.
+    Shows a preview and asks for confirmation before replacing anything.
+
+    \b
+    Examples:
+      mem compress                  # detect agent, pick interactively
+      mem compress --agent claude   # use Claude Code
+      mem compress --agent codex    # use Codex
+    """
+    from rich.live import Live
+    from rich.spinner import Spinner
+
+    resolved_cwd = cwd or None
+
+    # ------------------------------------------------------------------ #
+    # 1. Load existing memories                                           #
+    # ------------------------------------------------------------------ #
+    svc = _memory_service()
+    originals = svc.recall(cwd=resolved_cwd)
+
+    if not originals:
+        console.print(_render_action_screen(_ActionResult(
+            title="Compress",
+            body=Panel.fit("No memories found for this project.", border_style=ACCENT_YELLOW),
+            border_style=ACCENT_YELLOW,
+        )))
+        raise typer.Exit(code=0)
+
+    if len(originals) < 2:
+        console.print(_render_action_screen(_ActionResult(
+            title="Compress",
+            body=Panel.fit(
+                f"Only {len(originals)} memory — nothing to compress.",
+                border_style=ACCENT_YELLOW,
+            ),
+            border_style=ACCENT_YELLOW,
+        )))
+        raise typer.Exit(code=0)
+
+    # ------------------------------------------------------------------ #
+    # 2. Detect / resolve agent                                           #
+    # ------------------------------------------------------------------ #
+    available = detect_available_agents()
+
+    if not available:
+        hints = "\n".join(
+            f"  {name}: {hint}" for name, hint in AGENT_INSTALL_HINTS.items()
+        )
+        console.print(_render_action_screen(_ActionResult(
+            title="No agent found",
+            body=Panel.fit(
+                Text.assemble(
+                    ("No supported agent is installed.\n\n", "white"),
+                    ("Install one of:\n", "dim"),
+                    (hints, f"bold {ACCENT_YELLOW}"),
+                ),
+                border_style="red",
+            ),
+            border_style="red",
+        )))
+        raise typer.Exit(code=1)
+
+    chosen = agent.lower() if agent else ""
+
+    if chosen and chosen not in AGENT_COMMANDS:
+        agents_str = ", ".join(f"'{a}'" for a in AGENT_COMMANDS)
+        console.print(Panel.fit(
+            f"Unknown agent {chosen!r}. Choose one of: {agents_str}.",
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    if chosen and chosen not in available:
+        console.print(Panel.fit(
+            Text.assemble(
+                (f"Agent '{chosen}' is not installed.\n", "white"),
+                (f"Install it with: {AGENT_INSTALL_HINTS.get(chosen, '')}", f"bold {ACCENT_YELLOW}"),
+            ),
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    if not chosen:
+        if len(available) == 1:
+            chosen = available[0]
+        else:
+            console.print()
+            console.print(Text("Available agents:", style=f"bold {ACCENT_ORANGE}"))
+            for i, name in enumerate(available, 1):
+                console.print(f"  [{i}] {name}")
+            console.print()
+            while True:
+                try:
+                    raw = console.input(
+                        f"[bold {ACCENT_YELLOW}]Select agent (1-{len(available)}): [/]"
+                    ).strip()
+                except (EOFError, KeyboardInterrupt):
+                    raise typer.Exit(code=0)
+                if raw.isdigit() and 1 <= int(raw) <= len(available):
+                    chosen = available[int(raw) - 1]
+                    break
+                console.print("  Invalid choice, try again.", style="red")
+
+    # ------------------------------------------------------------------ #
+    # 3. Run compression with spinner                                     #
+    # ------------------------------------------------------------------ #
+    result_holder: list[tuple[list, list, str | None]] = []
+
+    def _do_compress() -> None:
+        res = svc.compress(cwd=resolved_cwd, agent=chosen)
+        result_holder.append(res)
+
+    import threading
+
+    spinner = Spinner("dots", text=Text(
+        f"  Compressing {len(originals)} memories with {chosen}…",
+        style=f"bold {ACCENT_ORANGE}",
+    ))
+
+    worker = threading.Thread(target=_do_compress, daemon=True)
+    worker.start()
+
+    with Live(spinner, refresh_per_second=12, console=console):
+        worker.join()
+
+    _, pairs, error = result_holder[0]
+
+    if error:
+        console.print(_render_action_screen(_ActionResult(
+            title="Compress failed",
+            body=Panel.fit(
+                Text.assemble(
+                    ("Agent error:\n", f"bold {ACCENT_CORAL}"),
+                    (error, "white"),
+                ),
+                border_style="red",
+            ),
+            border_style="red",
+        )))
+        raise typer.Exit(code=1)
+
+    if not pairs:
+        console.print(_render_action_screen(_ActionResult(
+            title="Compress",
+            body=Panel.fit("Agent returned no memories.", border_style=ACCENT_YELLOW),
+            border_style=ACCENT_YELLOW,
+        )))
+        raise typer.Exit(code=1)
+
+    # ------------------------------------------------------------------ #
+    # 4. Preview: before / after                                          #
+    # ------------------------------------------------------------------ #
+    preview = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
+    preview.add_column(
+        f"Before ({len(originals)})",
+        style="dim white",
+        ratio=1,
+    )
+    preview.add_column(
+        f"After ({len(pairs)})",
+        style=f"bold {ACCENT_YELLOW}",
+        ratio=1,
+    )
+
+    max_rows = max(len(originals), len(pairs))
+    for i in range(max_rows):
+        before = originals[i].content if i < len(originals) else ""
+        after_content, after_tags = pairs[i] if i < len(pairs) else ("", [])
+        after_cell = after_content
+        if after_tags:
+            after_cell += f"\n[dim]#{' #'.join(after_tags)}[/dim]"
+        preview.add_row(before, after_cell)
+
+    console.print(_render_action_screen(_ActionResult(
+        title=f"Compress — {originals[0].project_name}",
+        body=preview,
+        border_style=ACCENT_PINK,
+    )))
+
+    # ------------------------------------------------------------------ #
+    # 5. Confirm and save                                                 #
+    # ------------------------------------------------------------------ #
+    console.print()
+    try:
+        confirm = console.input(
+            f"[bold {ACCENT_YELLOW}]Replace {len(originals)} memories with {len(pairs)}? (y/N): [/]"
+        ).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        confirm = ""
+
+    if confirm != "y":
+        console.print(Text("  Cancelled.", style="dim"))
+        raise typer.Exit(code=0)
+
+    new_memories = [
+        Memory(content=content, project=originals[0].project, tags=tags)
+        for content, tags in pairs
+    ]
+    svc.replace_all(new_memories, cwd=resolved_cwd)
+
+    console.print(_render_action_screen(_ActionResult(
+        title="Compressed",
+        body=Panel.fit(
+            Text.assemble(
+                (f"{len(originals)}", f"bold {ACCENT_CORAL}"),
+                (" memories → ", "white"),
+                (f"{len(new_memories)}", f"bold {ACCENT_YELLOW}"),
+                (" memories saved.", "white"),
+            ),
+            border_style=ACCENT_PINK,
+        ),
         border_style=ACCENT_PINK,
     )))
 
