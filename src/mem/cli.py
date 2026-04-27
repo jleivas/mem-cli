@@ -549,9 +549,15 @@ def remember(
     content: str = typer.Argument(..., help="The memory to store."),
     tags: list[str] = typer.Option([], "--tag", "-t", help="Optional tags (repeatable)."),
     cwd: str = typer.Option("", "--cwd", hidden=True, help="Project path override."),
+    auto: bool = typer.Option(False, "--auto", hidden=True, help="Auto-capture: adds auto-captured tag and skips duplicates."),
 ) -> None:
     """[bold #E93A7D]Store[/] a [bold #F98C2B]memory[/] for the current project."""
     svc = _memory_service()
+    if auto:
+        _, was_saved = svc.auto_remember(content, cwd=cwd or None, tags=list(tags))
+        if not was_saved:
+            raise typer.Exit(code=0)
+        return
     memory = svc.remember(content, cwd=cwd or None, tags=tags)
 
     table = Table.grid(padding=(0, 1))

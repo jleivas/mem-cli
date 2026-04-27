@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,29 @@ class MemoryService:
                     return self._store.semantic_search(project, q_emb)
             return self._store.search(project, query)
         return self._store.list(project)
+
+    def auto_remember(
+        self,
+        content: str,
+        *,
+        cwd: str | None = None,
+        tags: list[str] | None = None,
+    ) -> tuple[Memory, bool]:
+        """Save memory only if no identical content exists for the project.
+
+        Returns (memory, was_saved). When was_saved is False the returned
+        memory is the pre-existing duplicate — nothing was written.
+        Always appends the 'auto-captured' tag.
+        """
+        project = _resolve_project(cwd)
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        for existing in self._store.list(project):
+            if hashlib.sha256(existing.content.encode()).hexdigest() == content_hash:
+                return existing, False
+        all_tags = list(tags or []) + ["auto-captured"]
+        memory = Memory(content=content, project=project, tags=all_tags)
+        memory.embedding = embed(content)
+        return self._store.save(memory), True
 
     def forget(self, memory_id: str, *, cwd: str | None = None) -> bool:
         """Delete a memory by id. Returns True if found and deleted."""

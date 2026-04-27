@@ -109,3 +109,68 @@ if cache_creation or cache_read:
 with open(jsonl_file, "a", encoding="utf-8") as fh:
     fh.write(json.dumps(event) + "\n")
 PYEOF
+
+# ------------------------------------------------------------------
+# Auto-capture: save the last assistant message as a project memory.
+# Runs silently — never blocks the Stop hook on failure.
+# ------------------------------------------------------------------
+PAYLOAD="$payload" python3 - <<'PYEOF'
+import json
+import os
+import subprocess
+import sys
+
+raw = os.environ.get("PAYLOAD", "")
+try:
+    payload = json.loads(raw)
+except (json.JSONDecodeError, ValueError):
+    sys.exit(0)
+
+if not isinstance(payload, dict):
+    sys.exit(0)
+
+cwd = payload.get("cwd", "")
+transcript_path = payload.get("transcript_path", "")
+if not cwd or not transcript_path or not os.path.isfile(transcript_path):
+    sys.exit(0)
+
+# Extract the last assistant text from the transcript.
+last_text = ""
+try:
+    with open(transcript_path, encoding="utf-8") as tf:
+        for line in tf:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(entry, dict) or entry.get("type") != "assistant":
+                continue
+            blocks = (entry.get("message") or {}).get("content") or []
+            text = " ".join(
+                b.get("text", "")
+                for b in blocks
+                if isinstance(b, dict) and b.get("type") == "text"
+            ).strip()
+            if text:
+                last_text = text
+except OSError:
+    sys.exit(0)
+
+# Skip trivially short or empty responses.
+if len(last_text) < 20:
+    sys.exit(0)
+
+content = last_text[:800].strip()
+
+try:
+    subprocess.run(
+        ["mem", "remember", "--auto", content, "--cwd", cwd],
+        timeout=15,
+        capture_output=True,
+    )
+except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+    pass
+PYEOF
