@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from mem import APP_NAME
@@ -82,11 +84,16 @@ def test_serve_disable_autostart_option_invokes_remover(monkeypatch) -> None:
 def test_serve_background_option_invokes_detached_launcher(monkeypatch) -> None:
     called = {"start": False}
 
-    def fake_start_detached_mcp_server(program=None, platform_name=None):
+    def fake_start_hidden_mcp_server(program=None, platform_name=None, stderr_log_path=None):
         called["start"] = True
-        return object()
+        class FakeProcess:
+            def poll(self):
+                return None
+        return FakeProcess()
 
-    monkeypatch.setattr("mem.cli.start_detached_mcp_server", fake_start_detached_mcp_server)
+    monkeypatch.setattr("mem.cli.start_hidden_mcp_server", fake_start_hidden_mcp_server)
+    monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: Path("/tmp/mem-serve.stderr.log"))
+    monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: True)
 
     runner = CliRunner()
     result = runner.invoke(app, ["serve", "--background"])
@@ -104,6 +111,7 @@ def test_serve_new_terminal_option_invokes_terminal_launcher(monkeypatch) -> Non
         return object()
 
     monkeypatch.setattr("mem.cli.start_new_terminal", fake_start_new_terminal)
+    monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: True)
 
     runner = CliRunner()
     result = runner.invoke(app, ["serve", "--new-terminal"])
@@ -119,6 +127,19 @@ def test_serve_rejects_conflicting_modes() -> None:
 
     assert result.exit_code != 0
     assert "serve --help" in result.output
+
+
+def test_serve_refuses_to_start_when_mcp_is_already_running(monkeypatch) -> None:
+    class FakeState:
+        running = True
+
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: type("R", (), {"load_state": lambda self: FakeState()})())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve"])
+
+    assert result.exit_code != 0
+    assert "already running" in result.output
 
 
 def test_setup_command_invokes_installer(monkeypatch) -> None:
@@ -177,12 +198,32 @@ def test_status_command(monkeypatch) -> None:
             return FakeState()
 
     monkeypatch.setattr("mem.cli._registry", lambda: FakeRegistry())
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: FakeRegistry())
 
     runner = CliRunner()
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 0
     assert "Runtime Status" in result.output
     assert "Monitor" in result.output
+
+
+def test_status_shows_running_mcp_server(monkeypatch) -> None:
+    class FakeState:
+        running = True
+        pid = 4242
+        started_at = None
+        last_updated = None
+
+    class FakeRegistry:
+        def load_state(self):
+            return FakeState()
+
+    monkeypatch.setattr("mem.cli._registry", lambda: FakeRegistry())
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: FakeRegistry())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
 
 
 def test_menu_quit_returns_cleanly(monkeypatch) -> None:

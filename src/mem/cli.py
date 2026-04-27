@@ -18,6 +18,7 @@ from . import APP_NAME, APP_VERSION
 from .config import get_default_claude_jsonl_path
 from .config import get_default_codex_jsonl_path
 from .config import get_mcp_state_path
+from .config import get_runtime_dir
 from .config import get_runtime_state_path
 from .app import build_monitor_service
 from .models.memory import Memory
@@ -27,7 +28,7 @@ from .services.macos_launchd import install_launch_agent
 from .services.macos_launchd import launch_agent_installed
 from .services.macos_launchd import launch_agent_path
 from .services.macos_launchd import remove_launch_agent
-from .services.autostart import start_detached_mcp_server
+from .services.autostart import start_hidden_mcp_server
 from .services.autostart import start_new_terminal
 from .services.memory_service import MemoryService
 from .services.prompt_service import (
@@ -131,6 +132,34 @@ def _bootstrap(
 
 def _registry() -> ProcessRegistry:
     return ProcessRegistry(RuntimeStateStore(get_runtime_state_path()))
+
+
+def _mcp_server_is_running() -> bool:
+    state = _mcp_registry().load_state()
+    return bool(state and state.running)
+
+
+def _wait_for_mcp_server_running(timeout: float = 10.0, interval: float = 0.2) -> bool:
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _mcp_server_is_running():
+            return True
+        time.sleep(interval)
+    return False
+
+
+def _mcp_serve_log_path() -> Path:
+    return get_runtime_dir() / "mcp-serve.stderr.log"
+
+
+def _tail_text(path: Path, max_lines: int = 20) -> str:
+    if not path.exists():
+        return ""
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    tail = lines[-max_lines:]
+    return "\n".join(tail).strip()
 
 
 _LOGO_LINES = [
@@ -1823,6 +1852,12 @@ def serve(
         raise typer.BadParameter(
             "Choose only one of --autostart, --disable-autostart, --background, or --new-terminal."
         )
+    if not (autostart or disable_autostart) and _mcp_server_is_running():
+        console.print(Panel.fit(
+            "MCP server is already running. Stop it with `mem mcp-stop` before starting a new one.",
+            border_style=ACCENT_ORANGE,
+        ))
+        raise typer.Exit(code=1)
     if autostart:
         if not is_supported_platform():
             console.print(Panel.fit(
@@ -1862,7 +1897,21 @@ def serve(
         )))
         return
     if background:
-        start_detached_mcp_server()
+        log_path = _mcp_serve_log_path()
+        process = start_hidden_mcp_server(stderr_log_path=log_path)
+        if not _wait_for_mcp_server_running():
+            trace = _tail_text(log_path)
+            console.print(Panel.fit(
+                Text.assemble(
+                    ("MCP server failed to start.\n", "white"),
+                    ("See log: ", "dim"),
+                    (str(log_path), f"bold {ACCENT_YELLOW}"),
+                    ("\n", ""),
+                    (trace or "No error trace was captured.", "red"),
+                ),
+                border_style="red",
+            ))
+            raise typer.Exit(code=1)
         console.print(_render_action_screen(_ActionResult(
             title="MCP server started in background",
             body=Panel.fit(
@@ -1879,6 +1928,12 @@ def serve(
         return
     if new_terminal:
         start_new_terminal()
+        if not _wait_for_mcp_server_running():
+            console.print(Panel.fit(
+                "MCP server failed to start.",
+                border_style="red",
+            ))
+            raise typer.Exit(code=1)
         console.print(_render_action_screen(_ActionResult(
             title="MCP server opened in a new terminal",
             body=Panel.fit(

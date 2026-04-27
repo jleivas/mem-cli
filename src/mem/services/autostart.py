@@ -5,6 +5,7 @@ import plistlib
 import shutil
 import subprocess
 import json
+import sys
 from pathlib import Path
 
 LAUNCH_AGENT_LABEL = "com.mem.cli.mcp"
@@ -48,13 +49,18 @@ def _resolve_mem_command(explicit: str | None = None) -> str:
     raise FileNotFoundError("Could not find the mem executable in PATH.")
 
 
-def start_detached_mcp_server(program: str | None = None, platform_name: str | None = None) -> subprocess.Popen[bytes]:
+def start_detached_mcp_server(
+    program: str | None = None,
+    platform_name: str | None = None,
+    stdout: object | None = None,
+    stderr: object | None = None,
+) -> subprocess.Popen[bytes]:
     resolved_program = _resolve_mem_command(program)
     platform = _platform(platform_name)
     kwargs: dict[str, object] = {
         "stdin": subprocess.DEVNULL,
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
+        "stdout": stdout if stdout is not None else subprocess.DEVNULL,
+        "stderr": stderr if stderr is not None else subprocess.DEVNULL,
     }
 
     if platform == "win32":
@@ -66,6 +72,49 @@ def start_detached_mcp_server(program: str | None = None, platform_name: str | N
         kwargs["start_new_session"] = True
 
     return subprocess.Popen([resolved_program, "serve"], **kwargs)  # type: ignore[arg-type]
+
+
+def start_hidden_mcp_server(
+    program: str | None = None,
+    platform_name: str | None = None,
+    stderr_log_path: Path | None = None,
+) -> subprocess.Popen[bytes]:
+    resolved_program = _resolve_mem_command(program)
+    platform = _platform(platform_name)
+    log_path = stderr_log_path or Path.home() / ".mem-cli" / "runtime" / "mcp-serve.stderr.log"
+    supervisor_code = (
+        "from pathlib import Path\n"
+        "import subprocess\n"
+        "import sys\n"
+        "\n"
+        "program = sys.argv[1]\n"
+        "log_path = Path(sys.argv[2])\n"
+        "log_path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "with log_path.open('ab') as stderr_log:\n"
+        "    proc = subprocess.Popen(\n"
+        "        [program, 'serve'],\n"
+        "        stdin=subprocess.PIPE,\n"
+        "        stdout=subprocess.DEVNULL,\n"
+        "        stderr=stderr_log,\n"
+        "    )\n"
+        "    proc.wait()\n"
+    )
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if platform == "win32":
+        creation_flags = 0
+        creation_flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+        creation_flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        kwargs["creationflags"] = creation_flags
+    else:
+        kwargs["start_new_session"] = True
+    return subprocess.Popen(
+        [sys.executable, "-c", supervisor_code, resolved_program, str(log_path)],
+        **kwargs,  # type: ignore[arg-type]
+    )
 
 
 def open_serve_in_new_terminal(
