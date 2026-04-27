@@ -91,8 +91,8 @@ def test_home_screen_renders_menu_entries() -> None:
     output = console.export_text()
 
     assert "mem" in output
-    assert "Start monitor" in output
-    assert "Dashboard" in output
+    assert "Monitoring" in output
+    assert "Memory" in output
 
 
 def test_footer_renders_hotkeys() -> None:
@@ -100,8 +100,8 @@ def test_footer_renders_hotkeys() -> None:
     console.print(_render_footer())
     output = console.export_text()
 
-    assert "Start" in output
-    assert "Dashboard" in output
+    assert "Monitoring" in output
+    assert "Memory" in output
     assert "Quit" in output
 
 

@@ -50,21 +50,49 @@ ACCENT_PINK = "#E93A7D"
 ACCENT_CORAL = "#F25C5C"
 ACCENT_ORANGE = "#F98C2B"
 ACCENT_YELLOW = "#F7B500"
-# (key, title, accent_color) — laid out in two rows of four
-MENU_ROW_1 = (
-    ("1", "Start monitor", ACCENT_PINK),
-    ("2", "Stop monitor",  ACCENT_CORAL),
-    ("3", "Dashboard",     ACCENT_ORANGE),
-    ("4", "Status",        ACCENT_YELLOW),
+# Main menu — two category cards + quit
+MENU_MAIN = (
+    ("1", "Monitoring", "Start · Stop · Dashboard · Status", ACCENT_PINK),
+    ("2", "Memory",     "Init · Config · MCP server",        ACCENT_ORANGE),
+    ("0", "Quit",       "",                                   ACCENT_YELLOW),
 )
-MENU_ROW_2 = (
-    ("5", "Init memory",   ACCENT_PINK),
-    ("6", "Config",        ACCENT_CORAL),
-    ("7", "Start MCP",     ACCENT_ORANGE),
-    ("8", "Stop MCP",      ACCENT_CORAL),
-    ("0", "Quit",          ACCENT_YELLOW),
+# Monitoring submenu
+MENU_MONITORING = (
+    ("1", "Start",     ACCENT_PINK),
+    ("2", "Stop",      ACCENT_CORAL),
+    ("3", "Dashboard", ACCENT_ORANGE),
+    ("4", "Status",    ACCENT_YELLOW),
+    ("0", "Back",      "dim white"),
 )
-MENU_ITEMS = MENU_ROW_1 + MENU_ROW_2
+# Memory submenu
+MENU_MEMORY = (
+    ("1", "Init",      ACCENT_PINK),
+    ("2", "Config",    ACCENT_CORAL),
+    ("3", "Start MCP", ACCENT_ORANGE),
+    ("4", "Stop MCP",  ACCENT_CORAL),
+    ("0", "Back",      "dim white"),
+)
+
+# Footer shortcut bars
+_FOOTER_MAIN = [
+    ("1", " Monitoring  ", ACCENT_PINK),
+    ("2", " Memory  ",     ACCENT_ORANGE),
+    ("0", " Quit",         ACCENT_YELLOW),
+]
+_FOOTER_MONITORING = [
+    ("1", " Start  ",     ACCENT_PINK),
+    ("2", " Stop  ",      ACCENT_CORAL),
+    ("3", " Dashboard  ", ACCENT_ORANGE),
+    ("4", " Status  ",    ACCENT_YELLOW),
+    ("0", " Back",        "dim white"),
+]
+_FOOTER_MEMORY = [
+    ("1", " Init  ",      ACCENT_PINK),
+    ("2", " Config  ",    ACCENT_CORAL),
+    ("3", " Start MCP  ", ACCENT_ORANGE),
+    ("4", " Stop MCP  ",  ACCENT_CORAL),
+    ("0", " Back",        "dim white"),
+]
 
 
 @dataclass(slots=True)
@@ -143,42 +171,51 @@ def _build_brand_line() -> Text:
 
 
 def _menu_cell(key: str, title: str, accent: str) -> Panel:
-    is_quit = key == "0"
-    title_style = f"bold {accent}" if not is_quit else "dim white"
+    is_back_or_quit = key == "0"
+    title_style = f"bold {accent}" if not is_back_or_quit else "dim white"
+    border = accent if not is_back_or_quit else "dim"
     label = Text()
     label.append(f" {key} ", style=f"reverse bold {accent}")
     label.append(f" {title}", style=title_style)
-    return Panel(Align.center(label), box=ROUNDED, border_style=accent, padding=(0, 0))
+    return Panel(Align.center(label), box=ROUNDED, border_style=border, padding=(0, 0))
 
 
-def _build_menu_options() -> Table:
-    outer = Table.grid(padding=(0, 0))
-    for row in (MENU_ROW_1, MENU_ROW_2):
-        inner = Table.grid(padding=(0, 1))
-        for _ in row:
-            inner.add_column(ratio=1)
-        inner.add_row(*[_menu_cell(k, t, a) for k, t, a in row])
-        outer.add_row(inner)
-    return outer
+def _menu_main_cell(key: str, title: str, subtitle: str, accent: str) -> Panel:
+    is_quit = key == "0"
+    title_style = f"bold {accent}" if not is_quit else "dim white"
+    border = accent if not is_quit else "dim"
+    label = Text(justify="center")
+    label.append(f" {key} ", style=f"reverse bold {accent}")
+    label.append(f"  {title}", style=title_style)
+    if subtitle:
+        label.append(f"\n{subtitle}", style="dim")
+    return Panel(Align.center(label), box=ROUNDED, border_style=border, padding=(0, 2))
+
+
+def _build_main_menu() -> Table:
+    inner = Table.grid(padding=(0, 1))
+    for _ in MENU_MAIN:
+        inner.add_column(ratio=1)
+    inner.add_row(*[_menu_main_cell(k, t, s, a) for k, t, s, a in MENU_MAIN])
+    return inner
+
+
+def _build_submenu_options(items: tuple) -> Table:
+    inner = Table.grid(padding=(0, 1))
+    for _ in items:
+        inner.add_column(ratio=1)
+    inner.add_row(*[_menu_cell(k, t, a) for k, t, a in items])
+    return inner
 
 
 
-def _render_footer(message: str = "Use the number keys to navigate.") -> Panel:
+def _render_footer(pairs: list | None = None) -> Panel:
+    if pairs is None:
+        pairs = _FOOTER_MAIN
     line = Text()
-    pairs = [
-        ("1", " Start  ", ACCENT_PINK),
-        ("2", " Stop  ", ACCENT_CORAL),
-        ("3", " Dashboard  ", ACCENT_ORANGE),
-        ("4", " Status  ", ACCENT_YELLOW),
-        ("5", " Init  ", ACCENT_PINK),
-        ("6", " Config  ", ACCENT_CORAL),
-        ("7", " Start MCP  ", ACCENT_ORANGE),
-        ("8", " Stop MCP  ", ACCENT_CORAL),
-        ("0", " Quit", ACCENT_YELLOW),
-    ]
     for key, label, accent in pairs:
         line.append(key, style=f"bold {accent}")
-        line.append(label)
+        line.append(label, style="dim")
     return Panel(
         Align.center(line),
         box=ROUNDED,
@@ -208,13 +245,43 @@ def _render_home_screen() -> Group:
         ),
         Text(""),
         Panel(
-            _build_menu_options(),
+            _build_main_menu(),
             box=ROUNDED,
             border_style=ACCENT_ORANGE,
             padding=(0, 1),
+            title=Text("Main menu", style=f"dim {ACCENT_ORANGE}"),
         ),
         Text(""),
-        _render_footer(),
+        _render_footer(_FOOTER_MAIN),
+        Text(""),
+        _render_prompt_line(),
+    )
+
+
+def _render_submenu_screen(title: str, accent: str, items: tuple, footer_pairs: list) -> Group:
+    header_text = Text.assemble(
+        ("mem", f"bold {ACCENT_PINK}"),
+        ("  ·  ", "dim"),
+        (title, f"bold {accent}"),
+    )
+    return Group(
+        Text(""),
+        Panel(
+            header_text,
+            box=ROUNDED,
+            border_style=accent,
+            padding=(0, 1),
+        ),
+        Text(""),
+        Panel(
+            _build_submenu_options(items),
+            box=ROUNDED,
+            border_style=accent,
+            padding=(0, 1),
+            title=Text(title, style=f"dim {accent}"),
+        ),
+        Text(""),
+        _render_footer(footer_pairs),
         Text(""),
         _render_prompt_line(),
     )
@@ -257,7 +324,7 @@ def _render_version_panel() -> Panel:
     )
 
 
-def _render_action_layout(result: _ActionResult, message: str = "Press Enter to return to the menu.") -> Group:
+def _render_action_layout(result: _ActionResult, footer_pairs: list | None = None) -> Group:
     header = Panel(
         Text.assemble(
             ("mem", f"bold {ACCENT_PINK}"),
@@ -275,7 +342,7 @@ def _render_action_layout(result: _ActionResult, message: str = "Press Enter to 
         padding=(0, 1),
         title=Text(result.title, style=f"bold {ACCENT_PINK}"),
     )
-    return Group(header, body, _render_footer(message))
+    return Group(header, body, _render_footer(footer_pairs))
 
 
 def _pause_for_continue() -> None:
@@ -382,10 +449,10 @@ def _mcp_stop_action() -> _ActionResult:
     return _ActionResult(title="MCP server stopped", body=table, border_style=ACCENT_CORAL)
 
 
-def _run_menu() -> None:
+def _run_monitoring_menu() -> None:
     while True:
         console.clear()
-        console.print(_render_home_screen())
+        console.print(_render_submenu_screen("Monitoring", ACCENT_PINK, MENU_MONITORING, _FOOTER_MONITORING))
         try:
             choice = console.input("").strip()
         except (EOFError, KeyboardInterrupt):
@@ -408,16 +475,37 @@ def _run_menu() -> None:
             result = _status_action()
             console.print(_render_action_screen(result))
             _pause_for_continue()
-        elif choice == "5":
+        elif choice == "0" or choice.lower() in {"b", "back"}:
+            return
+        else:
+            console.clear()
+            console.print(_render_action_screen(_ActionResult(
+                title="Unknown option",
+                body=Panel.fit(f"Unknown option: {choice!r}. Enter 1–4 or 0 to go back.", border_style="red"),
+                border_style="red",
+            )))
+            _pause_for_continue()
+
+
+def _run_memory_menu() -> None:
+    while True:
+        console.clear()
+        console.print(_render_submenu_screen("Memory", ACCENT_ORANGE, MENU_MEMORY, _FOOTER_MEMORY))
+        try:
+            choice = console.input("").strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+
+        if choice == "1":
             console.clear()
             _launch_init()
             _pause_for_continue()
-        elif choice == "6":
+        elif choice == "2":
             console.clear()
             import subprocess, sys as _sys
             subprocess.run([_sys.argv[0], "config"])
             _pause_for_continue()
-        elif choice == "7":
+        elif choice == "3":
             console.clear()
             console.print(Panel.fit(
                 Text.assemble(
@@ -427,11 +515,36 @@ def _run_menu() -> None:
                 border_style=ACCENT_ORANGE,
             ))
             _launch_mcp()
-        elif choice == "8":
+        elif choice == "4":
             console.clear()
             result = _mcp_stop_action()
             console.print(_render_action_screen(result))
             _pause_for_continue()
+        elif choice == "0" or choice.lower() in {"b", "back"}:
+            return
+        else:
+            console.clear()
+            console.print(_render_action_screen(_ActionResult(
+                title="Unknown option",
+                body=Panel.fit(f"Unknown option: {choice!r}. Enter 1–4 or 0 to go back.", border_style="red"),
+                border_style="red",
+            )))
+            _pause_for_continue()
+
+
+def _run_menu() -> None:
+    while True:
+        console.clear()
+        console.print(_render_home_screen())
+        try:
+            choice = console.input("").strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+
+        if choice == "1":
+            _run_monitoring_menu()
+        elif choice == "2":
+            _run_memory_menu()
         elif choice == "0" or choice.lower() in {"q", "quit", "exit"}:
             console.clear()
             return
@@ -439,7 +552,7 @@ def _run_menu() -> None:
             console.clear()
             console.print(_render_action_screen(_ActionResult(
                 title="Unknown option",
-                body=Panel.fit(f"Unknown option: {choice!r}. Enter 0-8.", border_style="red"),
+                body=Panel.fit(f"Unknown option: {choice!r}. Enter 1, 2, or 0 to quit.", border_style="red"),
                 border_style="red",
             )))
             _pause_for_continue()
