@@ -37,3 +37,4 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `mem serve --autostart` no longer prints `Boot-out failed: 5: Input/output error` on macOS when the LaunchAgent was not previously loaded. `launchctl bootout` stderr is now suppressed because errors are expected on a first install.
+- `mem config` no longer writes `"I need permission to write the file…"` into `AGENTS.md`. The prompt now explicitly instructs the agent to output markdown to stdout only and not touch any files. As a belt-and-suspenders measure, the Claude command now passes `--allowedTools ""` so tool use is disabled at the CLI level too.

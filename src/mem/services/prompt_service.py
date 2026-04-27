@@ -24,7 +24,10 @@ BUILTIN_PROMPT = "project_memory.md"
 USER_PROMPT_FILENAME = "project-memory.md"
 
 AGENT_COMMANDS: dict[str, list[str]] = {
-    "claude": ["claude", "-p", "--output-format", "text"],
+    # --tools restricts claude to read-only built-ins so it can explore the repo
+    # but cannot write files. Without this, claude asks for Write permission in
+    # -p mode and that request leaks into the captured stdout.
+    "claude": ["claude", "-p", "--output-format", "text", "--tools", "Read,Glob,Grep,LS"],
     "codex": ["codex", "exec"],
 }
 

@@ -1301,17 +1301,14 @@ def _config_prompt(agent: str, existing_agents: str, cwd: Path) -> str:
     existing_text = existing_block or "(AGENTS.md does not exist yet.)"
 
     return f"""
-You are updating the canonical AGENTS.md file for the mem CLI repository.
+You are generating the canonical AGENTS.md content for the mem CLI repository.
 
-Goal:
-- Generate the final AGENTS.md content only.
-- Update the file if it exists, or create it if it does not.
-- Keep CLAUDE.md as a symlink to AGENTS.md. Do not put divergent content in CLAUDE.md.
-- Do not create any extra markdown files.
-- Only touch AGENTS.md and CLAUDE.md.
+Output the complete AGENTS.md markdown to stdout — nothing else.
+Do not write any files. Do not use any tools. Do not ask for permissions.
+The caller will handle saving the output to disk.
 
 Rules:
-- Output markdown only. No code fences. No explanation.
+- Output markdown only. No code fences, no preamble, no trailing explanation.
 - Prioritize the selected agent's ordering first: {priority_agent} sections before {other_agent} sections if that improves clarity.
 - Preserve compatibility for Claude Code, Codex, and other MCP-capable agents.
 - Separate shared guidance from agent-specific guidance.
