@@ -357,6 +357,16 @@ def test_init_runs_config_before_agent_work(monkeypatch, tmp_path) -> None:
     assert calls[1] == "remember:remembered fact"
 
 
+def test_init_allows_canceling_agent_selection(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("mem.cli.detect_available_agents", lambda: ["claude", "codex"])
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["init", "--cwd", str(tmp_path)], input="0\n")
+
+    assert result.exit_code == 0
+    assert "Cancelled" in result.output
+
+
 def test_config_command_handles_agent_files(monkeypatch, tmp_path) -> None:
     calls: list[str] = []
 
@@ -384,3 +394,13 @@ def test_config_command_handles_agent_files(monkeypatch, tmp_path) -> None:
 
     assert result.exit_code == 0
     assert any(call.startswith("write:") for call in calls)
+
+
+def test_config_allows_canceling_agent_selection(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("mem.cli.detect_available_agents", lambda: ["claude", "codex"])
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["config", "--agent", "all", "--cwd", str(tmp_path)], input="0\n")
+
+    assert result.exit_code == 0
+    assert "Cancelled" in result.output

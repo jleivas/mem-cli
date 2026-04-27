@@ -554,7 +554,10 @@ def _run_memory_menu() -> None:
         elif choice == "2":
             console.clear()
             import subprocess, sys as _sys
-            subprocess.run([_sys.argv[0], "config"])
+            try:
+                subprocess.run([_sys.argv[0], "config"])
+            except KeyboardInterrupt:
+                console.print(Text("  Cancelled.", style="dim"))
             _pause_for_continue()
         elif choice == "3":
             console.clear()
@@ -948,22 +951,10 @@ def compress(
         if len(available) == 1:
             chosen = available[0]
         else:
-            console.print()
-            console.print(Text("Available agents:", style=f"bold {ACCENT_ORANGE}"))
-            for i, name in enumerate(available, 1):
-                console.print(f"  [{i}] {name}")
-            console.print()
-            while True:
-                try:
-                    raw = console.input(
-                        f"[bold {ACCENT_YELLOW}]Select agent (1-{len(available)}): [/]"
-                    ).strip()
-                except (EOFError, KeyboardInterrupt):
-                    raise typer.Exit(code=0)
-                if raw.isdigit() and 1 <= int(raw) <= len(available):
-                    chosen = available[int(raw) - 1]
-                    break
-                console.print("  Invalid choice, try again.", style="red")
+            chosen = _select_interactive_agent(available)
+            if chosen is None:
+                console.print(Text("  Cancelled.", style="dim"))
+                raise typer.Exit(code=0)
 
     # ------------------------------------------------------------------ #
     # 3. Run compression with spinner                                     #
@@ -1154,21 +1145,10 @@ def init(
         if len(available) == 1:
             chosen = available[0]
         else:
-            # Interactive picker
-            console.print()
-            console.print(Text("Available agents:", style=f"bold {ACCENT_ORANGE}"))
-            for i, name in enumerate(available, 1):
-                console.print(f"  [{i}] {name}")
-            console.print()
-            while True:
-                try:
-                    raw = console.input(f"[bold {ACCENT_YELLOW}]Select agent (1-{len(available)}): [/]").strip()
-                except (EOFError, KeyboardInterrupt):
-                    raise typer.Exit(code=0)
-                if raw.isdigit() and 1 <= int(raw) <= len(available):
-                    chosen = available[int(raw) - 1]
-                    break
-                console.print("  Invalid choice, try again.", style="red")
+            chosen = _select_interactive_agent(available)
+            if chosen is None:
+                console.print(Text("  Cancelled.", style="dim"))
+                raise typer.Exit(code=0)
 
     # ------------------------------------------------------------------ #
     # 3. Check if project already has memories                            #
@@ -1423,16 +1403,40 @@ def _select_config_mode() -> str:
     console.print(Text("Choose a configuration mode:", style=f"bold {ACCENT_ORANGE}"))
     console.print(f"  [1] configure a new AGENTS.md")
     console.print(f"  [2] only add mem MCP instructions in current AGENTS.md or CLAUDE.md")
+    console.print(f"  [0] cancel")
     console.print()
     while True:
         try:
-            raw = console.input(f"[bold {ACCENT_YELLOW}]Select mode (1-2): [/]").strip()
+            raw = console.input(f"[bold {ACCENT_YELLOW}]Select mode (1-2, 0 to cancel): [/]").strip()
         except (EOFError, KeyboardInterrupt):
             raise typer.Exit(code=0)
         if raw == "1":
             return "new"
         if raw == "2":
             return "mcp-only"
+        if raw == "0":
+            raise typer.Exit(code=0)
+        console.print("  Invalid choice, try again.", style="red")
+
+
+def _select_interactive_agent(available: list[str], *, prompt_label: str = "Select agent") -> str | None:
+    console.print()
+    console.print(Text("Available agents:", style=f"bold {ACCENT_ORANGE}"))
+    for i, name in enumerate(available, 1):
+        console.print(f"  [{i}] {name}")
+    console.print("  [0] cancel")
+    console.print()
+    while True:
+        try:
+            raw = console.input(
+                f"[bold {ACCENT_YELLOW}]{prompt_label} (1-{len(available)}, 0 to cancel): [/]"
+            ).strip()
+        except (EOFError, KeyboardInterrupt):
+            raise typer.Exit(code=0)
+        if raw == "0":
+            return None
+        if raw.isdigit() and 1 <= int(raw) <= len(available):
+            return available[int(raw) - 1]
         console.print("  Invalid choice, try again.", style="red")
 
 
@@ -1534,20 +1538,10 @@ def config(
         if len(available) == 1:
             chosen = available[0]
         else:
-            console.print()
-            console.print(Text("Available agents:", style=f"bold {ACCENT_ORANGE}"))
-            for i, name in enumerate(available, 1):
-                console.print(f"  [{i}] {name}")
-            console.print()
-            while True:
-                try:
-                    raw = console.input(f"[bold {ACCENT_YELLOW}]Select agent (1-{len(available)}): [/]").strip()
-                except (EOFError, KeyboardInterrupt):
-                    raise typer.Exit(code=0)
-                if raw.isdigit() and 1 <= int(raw) <= len(available):
-                    chosen = available[int(raw) - 1]
-                    break
-                console.print("  Invalid choice, try again.", style="red")
+            chosen = _select_interactive_agent(available)
+            if chosen is None:
+                console.print(Text("  Cancelled.", style="dim"))
+                raise typer.Exit(code=0)
     else:
         chosen = agent_lower
 
