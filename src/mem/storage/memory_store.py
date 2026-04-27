@@ -18,7 +18,7 @@ def _project_slug(project: str) -> str:
 
 
 def _memory_to_dict(memory: Memory) -> dict[str, Any]:
-    return {
+    d: dict[str, Any] = {
         "id": memory.id,
         "content": memory.content,
         "project": memory.project,
@@ -26,6 +26,9 @@ def _memory_to_dict(memory: Memory) -> dict[str, Any]:
         "timestamp": to_iso8601(memory.timestamp),
         "tags": memory.tags,
     }
+    if memory.embedding is not None:
+        d["embedding"] = memory.embedding
+    return d
 
 
 def _memory_from_dict(payload: dict[str, Any]) -> Memory:
@@ -38,6 +41,9 @@ def _memory_from_dict(payload: dict[str, Any]) -> Memory:
     ts = payload.get("timestamp")
     if ts:
         memory.timestamp = from_iso8601(ts)
+    raw_emb = payload.get("embedding")
+    if isinstance(raw_emb, list):
+        memory.embedding = [float(v) for v in raw_emb]
     return memory
 
 
@@ -127,6 +133,26 @@ class MemoryStore:
         needle = query.lower()
         matches = [m for m in self._read_all(project) if needle in m.content.lower()]
         return sorted(matches, key=lambda m: m.timestamp, reverse=True)
+
+    def semantic_search(
+        self,
+        project: str,
+        query_embedding: list[float],
+    ) -> list[Memory]:
+        """Return all memories ranked by cosine similarity to query_embedding.
+
+        Memories without embeddings are appended at the end sorted by timestamp.
+        """
+        from ..services.embedding_service import cosine_similarity
+
+        all_memories = self._read_all(project)
+        with_emb = [(m, cosine_similarity(query_embedding, m.embedding))
+                    for m in all_memories if m.embedding is not None]
+        without_emb = [m for m in all_memories if m.embedding is None]
+
+        ranked = [m for m, _ in sorted(with_emb, key=lambda x: x[1], reverse=True)]
+        fallback = sorted(without_emb, key=lambda m: m.timestamp, reverse=True)
+        return ranked + fallback
 
     def filter_by_tag(self, project: str, tag: str) -> list[Memory]:
         """Return memories that have the given tag (case-insensitive), newest first."""

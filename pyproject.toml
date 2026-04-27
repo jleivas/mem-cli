@@ -38,6 +38,9 @@ dev = [
   "pytest==8.4.2",
   "build==1.2.2",
 ]
+semantic = [
+  "sentence-transformers>=3.0.0",
+]
 
 [project.scripts]
 mem = "mem.cli:main"

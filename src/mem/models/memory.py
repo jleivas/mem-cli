@@ -25,6 +25,7 @@ class Memory:
     project_name: str = field(init=False)
     timestamp: datetime = field(default_factory=utc_now)
     tags: list[str] = field(default_factory=list)
+    embedding: list[float] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self.project_name = _project_name(self.project)

@@ -6,6 +6,7 @@ from typing import Any
 
 from ..models.memory import Memory
 from ..storage.memory_store import MemoryStore
+from .embedding_service import cosine_similarity, embed, is_available as _embeddings_available
 
 
 def _resolve_project(cwd: str | None) -> str:
@@ -36,6 +37,7 @@ class MemoryService:
         """Store a new memory for the current project and return it."""
         project = _resolve_project(cwd)
         memory = Memory(content=content, project=project, tags=tags or [])
+        memory.embedding = embed(content)
         return self._store.save(memory)
 
     def recall(
@@ -55,10 +57,22 @@ class MemoryService:
         if tag:
             memories = self._store.filter_by_tag(project, tag)
             if query:
+                if _embeddings_available():
+                    q_emb = embed(query)
+                    if q_emb is not None:
+                        with_emb = [(m, cosine_similarity(q_emb, m.embedding))
+                                    for m in memories if m.embedding is not None]
+                        without_emb = [m for m in memories if m.embedding is None]
+                        ranked = [m for m, _ in sorted(with_emb, key=lambda x: x[1], reverse=True)]
+                        return ranked + sorted(without_emb, key=lambda m: m.timestamp, reverse=True)
                 needle = query.lower()
                 memories = [m for m in memories if needle in m.content.lower()]
             return memories
         if query:
+            if _embeddings_available():
+                q_emb = embed(query)
+                if q_emb is not None:
+                    return self._store.semantic_search(project, q_emb)
             return self._store.search(project, query)
         return self._store.list(project)
 
