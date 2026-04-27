@@ -15,6 +15,10 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Semantic search via sentence-transformers
+- Auto-capture via Claude Code Stop hook
+- `mem compress` command for AI-powered memory compression
+- sentence-transformers is now a required dependency
 - `mem` CLI entrypoint with interactive menu (`mem` with no arguments)
 - `mem start` / `mem stop` / `mem status` — background token monitor lifecycle
 - `mem dashboard` — live terminal token-usage dashboard with per-agent views
