@@ -4,6 +4,7 @@ import os
 import plistlib
 import shutil
 import subprocess
+import json
 from pathlib import Path
 
 LAUNCH_AGENT_LABEL = "com.mem.cli.mcp"
@@ -65,6 +66,61 @@ def start_detached_mcp_server(program: str | None = None, platform_name: str | N
         kwargs["start_new_session"] = True
 
     return subprocess.Popen([resolved_program, "serve"], **kwargs)  # type: ignore[arg-type]
+
+
+def open_serve_in_new_terminal(
+    program: str | None = None,
+    platform_name: str | None = None,
+) -> subprocess.Popen[bytes] | None:
+    resolved_program = _resolve_mem_command(program)
+    platform = _platform(platform_name)
+
+    if platform == "darwin":
+        command = f"{resolved_program} serve"
+        apple_script = (
+            'tell application "Terminal"\n'
+            '  activate\n'
+            f"  do script {json.dumps(command)}\n"
+            'end tell'
+        )
+        return subprocess.Popen(
+            ["osascript", "-e", apple_script],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    if platform == "linux":
+        for terminal in ("x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"):
+            terminal_path = shutil.which(terminal)
+            if terminal_path:
+                cmd = [terminal_path]
+                if terminal in {"gnome-terminal", "konsole", "xfce4-terminal"}:
+                    cmd += ["--", resolved_program, "serve"]
+                else:
+                    cmd += ["-e", resolved_program, "serve"]
+                return subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+        return start_detached_mcp_server(resolved_program, platform)
+
+    if platform == "win32":
+        creation_flags = 0
+        creation_flags |= getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+        creation_flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+        return subprocess.Popen(
+            [resolved_program, "serve"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creation_flags,
+        )
+
+    raise RuntimeError(f"Unsupported platform for new-terminal launch: {platform}")
 
 
 def build_autostart_payload(program: str, platform_name: str | None = None) -> str | dict[str, object]:
@@ -165,3 +221,4 @@ install_launch_agent = install_autostart
 launch_agent_installed = autostart_installed
 launch_agent_path = autostart_path
 remove_launch_agent = remove_autostart
+start_new_terminal = open_serve_in_new_terminal

@@ -33,6 +33,15 @@ def test_help_lists_version_command() -> None:
     assert "Print the installed mem-cli version and exit." in result.output
 
 
+def test_serve_help_lists_launch_options() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "--help"])
+    assert result.exit_code == 0
+    assert "--background" in result.output
+    assert "--new-terminal" in result.output
+    assert "--autostart" in result.output
+
+
 def test_serve_autostart_option_invokes_installer(monkeypatch) -> None:
     called = {"install": False}
 
@@ -65,6 +74,48 @@ def test_serve_disable_autostart_option_invokes_remover(monkeypatch) -> None:
     assert result.exit_code == 0
     assert called["remove"] is True
     assert "MCP autostart disabled" in result.output
+
+
+def test_serve_background_option_invokes_detached_launcher(monkeypatch) -> None:
+    called = {"start": False}
+
+    def fake_start_detached_mcp_server(program=None, platform_name=None):
+        called["start"] = True
+        return object()
+
+    monkeypatch.setattr("mem.cli.start_detached_mcp_server", fake_start_detached_mcp_server)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "--background"])
+
+    assert result.exit_code == 0
+    assert called["start"] is True
+    assert "MCP server started in background" in result.output
+
+
+def test_serve_new_terminal_option_invokes_terminal_launcher(monkeypatch) -> None:
+    called = {"start": False}
+
+    def fake_start_new_terminal(program=None, platform_name=None):
+        called["start"] = True
+        return object()
+
+    monkeypatch.setattr("mem.cli.start_new_terminal", fake_start_new_terminal)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "--new-terminal"])
+
+    assert result.exit_code == 0
+    assert called["start"] is True
+    assert "MCP server opened in a new terminal" in result.output
+
+
+def test_serve_rejects_conflicting_modes() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "--background", "--new-terminal"])
+
+    assert result.exit_code != 0
+    assert "serve --help" in result.output
 
 
 def test_setup_command_invokes_installer(monkeypatch) -> None:

@@ -27,6 +27,8 @@ from .services.macos_launchd import install_launch_agent
 from .services.macos_launchd import launch_agent_installed
 from .services.macos_launchd import launch_agent_path
 from .services.macos_launchd import remove_launch_agent
+from .services.autostart import start_detached_mcp_server
+from .services.autostart import start_new_terminal
 from .services.memory_service import MemoryService
 from .services.prompt_service import (
     AgentResult,
@@ -1795,6 +1797,16 @@ def serve(
         "--disable-autostart",
         help="Disable the OS startup item and remove the login entry.",
     ),
+    background: bool = typer.Option(
+        False,
+        "--background",
+        help="Run mem serve detached in the background and exit.",
+    ),
+    new_terminal: bool = typer.Option(
+        False,
+        "--new-terminal",
+        help="Open mem serve in a new terminal window and exit.",
+    ),
 ) -> None:
     """[bold #E93A7D]Start[/] the local [bold #F98C2B]MCP server[/] over stdio.
 
@@ -1810,8 +1822,11 @@ def serve(
       }
     """
     import sys
-    if autostart and disable_autostart:
-        raise typer.BadParameter("Choose either --autostart or --disable-autostart, not both.")
+    selected_modes = [autostart, disable_autostart, background, new_terminal]
+    if sum(1 for mode in selected_modes if mode) > 1:
+        raise typer.BadParameter(
+            "Choose only one of --autostart, --disable-autostart, --background, or --new-terminal."
+        )
     if autostart:
         if not is_supported_platform():
             console.print(Panel.fit(
@@ -1848,6 +1863,37 @@ def serve(
                 border_style=ACCENT_YELLOW,
             ),
             border_style=ACCENT_CORAL if removed else ACCENT_YELLOW,
+        )))
+        return
+    if background:
+        start_detached_mcp_server()
+        console.print(_render_action_screen(_ActionResult(
+            title="MCP server started in background",
+            body=Panel.fit(
+                Text.assemble(
+                    ("The MCP server is now running detached from this terminal.", "dim"),
+                    ("\nUse ", "white"),
+                    ("mem mcp-stop", f"bold {ACCENT_YELLOW}"),
+                    (" to stop it.", "white"),
+                ),
+                border_style=ACCENT_PINK,
+            ),
+            border_style=ACCENT_PINK,
+        )))
+        return
+    if new_terminal:
+        start_new_terminal()
+        console.print(_render_action_screen(_ActionResult(
+            title="MCP server opened in a new terminal",
+            body=Panel.fit(
+                Text.assemble(
+                    ("A new terminal window was requested for ", "white"),
+                    ("mem serve", f"bold {ACCENT_YELLOW}"),
+                    (".", "white"),
+                ),
+                border_style=ACCENT_PINK,
+            ),
+            border_style=ACCENT_PINK,
         )))
         return
     if sys.stdin.isatty():

@@ -263,6 +263,24 @@ The server blocks and communicates over stdin/stdout. To test it interactively:
 npx @modelcontextprotocol/inspector mem serve
 ```
 
+If you want to run it detached from the current shell:
+
+```bash
+mem serve --background
+```
+
+If you prefer to open it in a new terminal window:
+
+```bash
+mem serve --new-terminal
+```
+
+These options are for manual launches. For automatic startup at login, use:
+
+```bash
+mem setup
+```
+
 ### Available MCP tools
 
 | Tool | Description |
