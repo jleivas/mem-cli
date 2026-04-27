@@ -26,6 +26,7 @@ dependencies = [
   "typer>=0.15.0",
   "rich==13.9.4",
   "mcp>=1.0.0",
+  "sentence-transformers>=3.0.0",
 ]
 
 [project.urls]
@@ -37,9 +38,6 @@ Issues = "https://github.com/your-org/mem-cli/issues"
 dev = [
   "pytest==8.4.2",
   "build==1.2.2",
-]
-semantic = [
-  "sentence-transformers>=3.0.0",
 ]
 
 [project.scripts]
