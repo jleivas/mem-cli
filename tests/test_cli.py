@@ -6,6 +6,9 @@ from mem.cli import app
 from mem.cli import _run_menu
 from mem.cli import _render_home_screen
 from mem.cli import _render_footer
+from mem.cli import _render_submenu_screen
+from mem.cli import MENU_MONITORING
+from mem.cli import MENU_MEMORY
 from rich.console import Console
 
 
@@ -206,6 +209,19 @@ def test_footer_renders_hotkeys() -> None:
     assert "Monitoring" in output
     assert "Memory" in output
     assert "Quit" in output
+
+
+def test_submenu_renders_horizontal_cards() -> None:
+    console = Console(record=True, width=120)
+    console.print(_render_submenu_screen("Monitoring", "#E93A7D", MENU_MONITORING, []))
+    console.print(_render_submenu_screen("Memory", "#F98C2B", MENU_MEMORY, []))
+    output = console.export_text()
+
+    assert "Monitoring" in output
+    assert "Launch the monitor" in output
+    assert "Memory" in output
+    assert "Generate project" in output
+    assert "Start the MCP" in output
 
 
 def test_init_runs_config_before_agent_work(monkeypatch, tmp_path) -> None:

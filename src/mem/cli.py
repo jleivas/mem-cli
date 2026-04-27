@@ -65,19 +65,19 @@ MENU_MAIN = (
 )
 # Monitoring submenu
 MENU_MONITORING = (
-    ("1", "Start",     ACCENT_PINK),
-    ("2", "Stop",      ACCENT_CORAL),
-    ("3", "Dashboard", ACCENT_ORANGE),
-    ("4", "Status",    ACCENT_YELLOW),
-    ("0", "Back",      "dim white"),
+    ("1", "Start",     "Launch the monitor",      ACCENT_PINK),
+    ("2", "Stop",      "Stop the monitor",        ACCENT_CORAL),
+    ("3", "Dashboard", "Open the live dashboard", ACCENT_ORANGE),
+    ("4", "Status",    "Inspect runtime state",   ACCENT_YELLOW),
+    ("0", "Back",      "",                        "dim white"),
 )
 # Memory submenu
 MENU_MEMORY = (
-    ("1", "Init",      ACCENT_PINK),
-    ("2", "Config",    ACCENT_CORAL),
-    ("3", "Start MCP", ACCENT_ORANGE),
-    ("4", "Stop MCP",  ACCENT_CORAL),
-    ("0", "Back",      "dim white"),
+    ("1", "Init",      "Generate project memory", ACCENT_PINK),
+    ("2", "Config",    "Prepare project config",  ACCENT_CORAL),
+    ("3", "Start MCP", "Start the MCP server",    ACCENT_ORANGE),
+    ("4", "Stop MCP",  "Stop the MCP server",     ACCENT_CORAL),
+    ("0", "Back",      "",                        "dim white"),
 )
 
 # Footer shortcut bars
@@ -187,7 +187,7 @@ def _menu_cell(key: str, title: str, accent: str) -> Panel:
     return Panel(Align.center(label), box=ROUNDED, border_style=border, padding=(0, 0))
 
 
-def _menu_main_cell(key: str, title: str, subtitle: str, accent: str) -> Panel:
+def _menu_card(key: str, title: str, subtitle: str, accent: str) -> Panel:
     is_quit = key == "0"
     title_style = f"bold {accent}" if not is_quit else "dim white"
     border = accent if not is_quit else "dim"
@@ -203,7 +203,7 @@ def _build_main_menu() -> Table:
     inner = Table.grid(padding=(0, 1))
     for _ in MENU_MAIN:
         inner.add_column(ratio=1)
-    inner.add_row(*[_menu_main_cell(k, t, s, a) for k, t, s, a in MENU_MAIN])
+    inner.add_row(*[_menu_card(k, t, s, a) for k, t, s, a in MENU_MAIN])
     return inner
 
 
@@ -211,7 +211,7 @@ def _build_submenu_options(items: tuple) -> Table:
     inner = Table.grid(padding=(0, 1))
     for _ in items:
         inner.add_column(ratio=1)
-    inner.add_row(*[_menu_cell(k, t, a) for k, t, a in items])
+    inner.add_row(*[_menu_card(k, t, s, a) for k, t, s, a in items])
     return inner
 
 
