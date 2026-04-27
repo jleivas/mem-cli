@@ -33,6 +33,40 @@ def test_help_lists_version_command() -> None:
     assert "Print the installed mem-cli version and exit." in result.output
 
 
+def test_serve_autostart_option_invokes_installer(monkeypatch) -> None:
+    called = {"install": False}
+
+    def fake_install_launch_agent():
+        called["install"] = True
+        return "/tmp/com.mem.cli.mcp.plist"
+
+    monkeypatch.setattr("mem.cli.install_launch_agent", fake_install_launch_agent)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "--autostart"])
+
+    assert result.exit_code == 0
+    assert called["install"] is True
+    assert "MCP autostart enabled" in result.output
+
+
+def test_serve_disable_autostart_option_invokes_remover(monkeypatch) -> None:
+    called = {"remove": False}
+
+    def fake_remove_launch_agent():
+        called["remove"] = True
+        return True
+
+    monkeypatch.setattr("mem.cli.remove_launch_agent", fake_remove_launch_agent)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "--disable-autostart"])
+
+    assert result.exit_code == 0
+    assert called["remove"] is True
+    assert "MCP autostart disabled" in result.output
+
+
 def test_start_and_stop_commands(monkeypatch) -> None:
     class FakeState:
         pid = 123
@@ -76,7 +110,8 @@ def test_status_command(monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 0
-    assert "running" in result.output
+    assert "Runtime Status" in result.output
+    assert "Monitor" in result.output
 
 
 def test_menu_quit_returns_cleanly(monkeypatch) -> None:

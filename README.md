@@ -142,6 +142,28 @@ External plugins should expose a zero-argument factory that returns a
 
 ---
 
+## MCP Autostart On macOS
+
+If you want `mem serve` to start automatically when you log in to macOS, install
+the LaunchAgent once:
+
+```bash
+mem serve --autostart
+```
+
+This creates a LaunchAgent at `~/Library/LaunchAgents/com.mem.cli.mcp.plist`
+that runs `mem serve` at login.
+
+To stop the server and disable autostart:
+
+```bash
+mem mcp-stop
+```
+
+You can re-enable it later with `mem serve --autostart`.
+
+---
+
 ## Quick Start
 
 ```bash

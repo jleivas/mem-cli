@@ -22,6 +22,11 @@ from .config import get_runtime_state_path
 from .app import build_monitor_service
 from .models.memory import Memory
 from .services.adapters import discover_token_source_plugins
+from .services.macos_launchd import is_supported_platform
+from .services.macos_launchd import install_launch_agent
+from .services.macos_launchd import launch_agent_installed
+from .services.macos_launchd import launch_agent_path
+from .services.macos_launchd import remove_launch_agent
 from .services.memory_service import MemoryService
 from .services.prompt_service import (
     AgentResult,
@@ -391,6 +396,7 @@ def _mcp_registry() -> ProcessRegistry:
 def _status_action() -> _ActionResult:
     monitor_state = _registry().load_state()
     mcp_state = _mcp_registry().load_state()
+    autostart_enabled = launch_agent_installed()
 
     table = Table(title="Runtime Status", expand=True)
     table.add_column("Service", style=ACCENT_ORANGE, no_wrap=True)
@@ -427,6 +433,13 @@ def _status_action() -> _ActionResult:
     else:
         table.add_row("MCP server", _state_text(False), "-", "-")
 
+    table.add_row(
+        "MCP autostart",
+        Text("enabled", style=f"bold {ACCENT_PINK}") if autostart_enabled else Text("disabled", style="dim"),
+        "-",
+        str(launch_agent_path()),
+    )
+
     any_running = (monitor_state and monitor_state.running) or (mcp_state and mcp_state.running)
     return _ActionResult(
         title="Status",
@@ -436,8 +449,15 @@ def _status_action() -> _ActionResult:
 
 
 def _mcp_stop_action() -> _ActionResult:
+    removed = remove_launch_agent()
     state = _mcp_registry().stop()
     if state is None:
+        if removed:
+            return _ActionResult(
+                title="MCP server stopped",
+                body=Panel.fit("MCP autostart disabled.", border_style=ACCENT_CORAL),
+                border_style=ACCENT_CORAL,
+            )
         return _ActionResult(
             title="Stop MCP server",
             body=Panel.fit("No running MCP server found.", border_style=ACCENT_YELLOW),
@@ -446,6 +466,8 @@ def _mcp_stop_action() -> _ActionResult:
     table = Table.grid(padding=(0, 1))
     table.add_row(Text("Stopped", style=f"bold {ACCENT_YELLOW}"), Text("MCP server halted", style="green"))
     table.add_row(Text("PID", style=f"bold {ACCENT_CORAL}"), Text(str(state.pid), style="white"))
+    if removed:
+        table.add_row(Text("Autostart", style=f"bold {ACCENT_CORAL}"), Text("disabled", style="green"))
     return _ActionResult(title="MCP server stopped", body=table, border_style=ACCENT_CORAL)
 
 
@@ -1762,7 +1784,18 @@ def _serve_tty() -> None:
 
 
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
-def serve() -> None:
+def serve(
+    autostart: bool = typer.Option(
+        False,
+        "--autostart",
+        help="Install and enable a macOS LaunchAgent so mem serve starts at login.",
+    ),
+    disable_autostart: bool = typer.Option(
+        False,
+        "--disable-autostart",
+        help="Disable the macOS LaunchAgent and remove the login item.",
+    ),
+) -> None:
     """[bold #E93A7D]Start[/] the local [bold #F98C2B]MCP server[/] over stdio.
 
     Exposes memory and observability as MCP tools so agents can read and
@@ -1777,6 +1810,46 @@ def serve() -> None:
       }
     """
     import sys
+    if autostart and disable_autostart:
+        raise typer.BadParameter("Choose either --autostart or --disable-autostart, not both.")
+    if autostart:
+        if not is_supported_platform():
+            console.print(Panel.fit(
+                "Autostart is only available on macOS LaunchAgent installs.",
+                border_style="red",
+            ))
+            raise typer.Exit(code=1)
+        plist_path = install_launch_agent()
+        console.print(_render_action_screen(_ActionResult(
+            title="MCP autostart enabled",
+            body=Panel.fit(
+                Text.assemble(
+                    ("LaunchAgent installed at ", "white"),
+                    (str(plist_path), f"bold {ACCENT_YELLOW}"),
+                    ("\nmem serve will start automatically when you log in.", "dim"),
+                ),
+                border_style=ACCENT_PINK,
+            ),
+            border_style=ACCENT_PINK,
+        )))
+        return
+    if disable_autostart:
+        if not is_supported_platform():
+            console.print(Panel.fit(
+                "Autostart is only available on macOS LaunchAgent installs.",
+                border_style="red",
+            ))
+            raise typer.Exit(code=1)
+        removed = remove_launch_agent()
+        console.print(_render_action_screen(_ActionResult(
+            title="MCP autostart disabled",
+            body=Panel.fit(
+                "LaunchAgent removed." if removed else "No LaunchAgent found.",
+                border_style=ACCENT_YELLOW,
+            ),
+            border_style=ACCENT_CORAL if removed else ACCENT_YELLOW,
+        )))
+        return
     if sys.stdin.isatty():
         _serve_tty()
     else:
