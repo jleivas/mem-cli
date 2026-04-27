@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from . import APP_VERSION
+from . import APP_NAME, APP_VERSION
 from .config import get_default_claude_jsonl_path
 from .config import get_default_codex_jsonl_path
 from .config import get_mcp_state_path
@@ -80,8 +80,18 @@ def _bootstrap_env() -> None:
 
 
 @app.callback(invoke_without_command=True)
-def _bootstrap() -> None:
+def _bootstrap(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Print the installed mem-cli version and exit.",
+        is_eager=True,
+    ),
+) -> None:
     _bootstrap_env()
+    if version:
+        console.print(_render_version_panel())
+        raise typer.Exit()
 
 
 def _registry() -> ProcessRegistry:
@@ -1670,7 +1680,6 @@ def adapters() -> None:
     table.add_column("Source", style="white", ratio=2)
 
     table.add_row("jsonl", "built-in", "Local JSON/JSONL token files")
-    table.add_row("simulated", "built-in", "Local demo source for the dashboard")
 
     plugins = discover_token_source_plugins()
     if plugins:

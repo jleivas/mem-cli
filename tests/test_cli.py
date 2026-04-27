@@ -17,6 +17,14 @@ def test_version_command() -> None:
     assert APP_VERSION in result.output
 
 
+def test_root_version_option() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert APP_NAME in result.output
+    assert APP_VERSION in result.output
+
+
 def test_help_lists_version_command() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
