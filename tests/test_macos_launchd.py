@@ -4,7 +4,7 @@ import plistlib
 from pathlib import Path
 from unittest.mock import patch
 
-from mem.services import macos_launchd
+from mem.services import autostart as macos_launchd
 
 
 def test_launch_agent_payload_targets_mem_serve() -> None:

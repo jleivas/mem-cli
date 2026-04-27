@@ -1788,12 +1788,12 @@ def serve(
     autostart: bool = typer.Option(
         False,
         "--autostart",
-        help="Install and enable a macOS LaunchAgent so mem serve starts at login.",
+        help="Install and enable an OS startup item so mem serve starts at login.",
     ),
     disable_autostart: bool = typer.Option(
         False,
         "--disable-autostart",
-        help="Disable the macOS LaunchAgent and remove the login item.",
+        help="Disable the OS startup item and remove the login entry.",
     ),
 ) -> None:
     """[bold #E93A7D]Start[/] the local [bold #F98C2B]MCP server[/] over stdio.
@@ -1815,7 +1815,7 @@ def serve(
     if autostart:
         if not is_supported_platform():
             console.print(Panel.fit(
-                "Autostart is only available on macOS LaunchAgent installs.",
+                "Autostart is only available on macOS, Linux, and Windows.",
                 border_style="red",
             ))
             raise typer.Exit(code=1)
@@ -1836,7 +1836,7 @@ def serve(
     if disable_autostart:
         if not is_supported_platform():
             console.print(Panel.fit(
-                "Autostart is only available on macOS LaunchAgent installs.",
+                "Autostart is only available on macOS, Linux, and Windows.",
                 border_style="red",
             ))
             raise typer.Exit(code=1)
