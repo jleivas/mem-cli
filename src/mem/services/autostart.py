@@ -47,6 +47,26 @@ def _resolve_mem_command(explicit: str | None = None) -> str:
     raise FileNotFoundError("Could not find the mem executable in PATH.")
 
 
+def start_detached_mcp_server(program: str | None = None, platform_name: str | None = None) -> subprocess.Popen[bytes]:
+    resolved_program = _resolve_mem_command(program)
+    platform = _platform(platform_name)
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+
+    if platform == "win32":
+        creation_flags = 0
+        creation_flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+        creation_flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        kwargs["creationflags"] = creation_flags
+    else:
+        kwargs["start_new_session"] = True
+
+    return subprocess.Popen([resolved_program, "serve"], **kwargs)  # type: ignore[arg-type]
+
+
 def build_autostart_payload(program: str, platform_name: str | None = None) -> str | dict[str, object]:
     platform = _platform(platform_name)
     if platform == "darwin":
@@ -66,6 +86,7 @@ def build_autostart_payload(program: str, platform_name: str | None = None) -> s
             "[Service]\n"
             "Type=simple\n"
             f"ExecStart={program} serve\n"
+            "WorkingDirectory=%h\n"
             "Restart=on-failure\n"
             "RestartSec=2\n\n"
             "[Install]\n"
@@ -109,6 +130,7 @@ def install_autostart(
         return autostart_file
 
     autostart_file.write_text(str(payload), encoding="utf-8")
+    start_detached_mcp_server(resolved_program, platform)
     return autostart_file
 
 

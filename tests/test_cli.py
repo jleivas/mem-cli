@@ -67,6 +67,23 @@ def test_serve_disable_autostart_option_invokes_remover(monkeypatch) -> None:
     assert "MCP autostart disabled" in result.output
 
 
+def test_setup_command_invokes_installer(monkeypatch) -> None:
+    called = {"install": False}
+
+    def fake_install_launch_agent():
+        called["install"] = True
+        return "/tmp/com.mem.cli.mcp.plist"
+
+    monkeypatch.setattr("mem.cli.install_launch_agent", fake_install_launch_agent)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["setup"])
+
+    assert result.exit_code == 0
+    assert called["install"] is True
+    assert "MCP setup complete" in result.output
+
+
 def test_start_and_stop_commands(monkeypatch) -> None:
     class FakeState:
         pid = 123

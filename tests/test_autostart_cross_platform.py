@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from mem.services import autostart
 
@@ -24,3 +25,19 @@ def test_linux_autostart_payload_contains_execstart() -> None:
 def test_windows_autostart_payload_contains_mem_serve() -> None:
     payload = autostart.build_autostart_payload("C:\\Program Files\\mem\\mem.exe", platform_name="win32")
     assert '"C:\\Program Files\\mem\\mem.exe" serve' in payload
+
+
+def test_windows_autostart_starts_detached_process(monkeypatch) -> None:
+    popen_calls = []
+
+    class FakePopen:
+        def __init__(self, cmd, **kwargs):
+            popen_calls.append((cmd, kwargs))
+
+    monkeypatch.setattr(autostart, "_resolve_mem_command", lambda explicit=None: "C:\\mem\\mem.exe")
+
+    with patch.object(autostart.subprocess, "Popen", FakePopen):
+        autostart.start_detached_mcp_server(platform_name="win32")
+
+    assert popen_calls[0][0] == ["C:\\mem\\mem.exe", "serve"]
+    assert "creationflags" in popen_calls[0][1]

@@ -1858,6 +1858,31 @@ def serve(
 
 
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def setup() -> None:
+    """Enable autostart and start the MCP server now on supported platforms."""
+    if not is_supported_platform():
+        console.print(Panel.fit(
+            "Autostart setup is only available on macOS, Linux, and Windows.",
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
+
+    autostart_path = install_launch_agent()
+    console.print(_render_action_screen(_ActionResult(
+        title="MCP setup complete",
+        body=Panel.fit(
+            Text.assemble(
+                ("Autostart enabled at ", "white"),
+                (str(autostart_path), f"bold {ACCENT_YELLOW}"),
+                ("\nThe MCP server has been started or scheduled to start immediately.", "dim"),
+            ),
+            border_style=ACCENT_PINK,
+        ),
+        border_style=ACCENT_PINK,
+    )))
+
+
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def adapters() -> None:
     """List available token source adapters and discovered plugins."""
     table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
