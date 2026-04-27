@@ -7,7 +7,7 @@ This document covers how to cut a GitHub release, publish a Homebrew tap, and in
 ## Prerequisites
 
 - Write access to the `mem-cli` GitHub repository
-- Python 3.11+ with the dev dependencies installed (`pip install -e ".[dev]"`)
+- Python 3.11+ with the release tooling installed (`pip install -e ".[release]"`)
 - `gh` CLI authenticated (`gh auth login`)
 - (For the tap) write access to a `homebrew-mem-cli` GitHub repository under the same org/user
 

@@ -68,7 +68,12 @@ To also install development dependencies (pytest, etc.):
 pip install -e ".[dev]"
 ```
 
-That also installs the build tooling used to create release artifacts.
+To install the release tooling (needed to run `scripts/release_build.py`):
+
+```bash
+pip install -e ".[release]"
+```
+
 The release helpers live under `scripts/` and are not part of the installed
 `mem` runtime package.
 

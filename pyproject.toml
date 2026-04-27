@@ -37,6 +37,8 @@ Issues = "https://github.com/your-org/mem-cli/issues"
 [project.optional-dependencies]
 dev = [
   "pytest==8.4.2",
+]
+release = [
   "build==1.2.2",
 ]
 
