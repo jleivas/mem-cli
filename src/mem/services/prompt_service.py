@@ -23,13 +23,21 @@ REMEMBER_RE = re.compile(
 BUILTIN_PROMPT = "project_memory.md"
 USER_PROMPT_FILENAME = "project-memory.md"
 
+# Base command for each agent. Prompt is appended as the last positional arg
+# for agents that accept it that way (see _AGENT_USES_STDIN below).
 AGENT_COMMANDS: dict[str, list[str]] = {
-    # --tools restricts claude to read-only built-ins so it can explore the repo
-    # but cannot write files. Without this, claude asks for Write permission in
-    # -p mode and that request leaks into the captured stdout.
-    "claude": ["claude", "-p", "--output-format", "text", "--tools", "Read,Glob,Grep,LS"],
+    # --disallowedTools blocks write operations so no permission prompt leaks
+    # into the captured stdout. The prompt is delivered via stdin (see below)
+    # to avoid argument-parsing conflicts with variadic --tools / --disallowedTools.
+    "claude": ["claude", "-p", "--output-format", "text", "--disallowedTools", "Write,Edit,MultiEdit,Bash"],
     "codex": ["codex", "exec"],
 }
+
+# Agents that read the prompt from stdin instead of a positional argument.
+# claude -p accepts stdin when no positional prompt is given, and using stdin
+# avoids the variadic-flag parsing bug where --disallowedTools <tools...>
+# consumes the prompt string as an extra tool name.
+_AGENT_USES_STDIN: frozenset[str] = frozenset({"claude"})
 
 AGENT_INSTALL_HINTS: dict[str, str] = {
     "claude": "npm install -g @anthropic-ai/claude-code",
@@ -116,11 +124,13 @@ def run_agent(
     if cmd is None:
         return AgentResult(exit_code=1, stderr=f"Unknown agent: {agent!r}.")
 
-    full_cmd = cmd + [prompt]
+    use_stdin = agent in _AGENT_USES_STDIN
+    full_cmd = cmd if use_stdin else cmd + [prompt]
 
     try:
         proc = subprocess.Popen(
             full_cmd,
+            stdin=subprocess.PIPE if use_stdin else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -133,6 +143,11 @@ def run_agent(
             exit_code=127,
             stderr=f"Agent '{agent}' not found in PATH. Make sure it is installed.",
         )
+
+    if use_stdin:
+        assert proc.stdin is not None
+        proc.stdin.write(prompt)
+        proc.stdin.close()
 
     stderr_lines: list[str] = []
 
@@ -165,11 +180,13 @@ def run_agent_text(prompt: str, agent: str) -> AgentTextResult:
             result=AgentResult(exit_code=1, stderr=f"Unknown agent: {agent!r}."),
         )
 
-    full_cmd = cmd + [prompt]
+    use_stdin = agent in _AGENT_USES_STDIN
+    full_cmd = cmd if use_stdin else cmd + [prompt]
 
     try:
         completed = subprocess.run(
             full_cmd,
+            input=prompt if use_stdin else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
