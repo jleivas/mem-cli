@@ -90,20 +90,31 @@ def start_hidden_mcp_server(
         "program = sys.argv[1]\n"
         "log_path = Path(sys.argv[2])\n"
         "log_path.parent.mkdir(parents=True, exist_ok=True)\n"
-        "with log_path.open('ab') as stderr_log:\n"
-        "    proc = subprocess.Popen(\n"
-        "        [program, 'serve'],\n"
-        "        stdin=subprocess.PIPE,\n"
-        "        stdout=subprocess.DEVNULL,\n"
-        "        stderr=stderr_log,\n"
-        "    )\n"
-        "    proc.wait()\n"
+        "\n"
+        "try:\n"
+        "    with log_path.open('a', encoding='utf-8') as stderr_log:\n"
+        "        proc = subprocess.Popen(\n"
+        "            [program, 'serve'],\n"
+        "            stdin=subprocess.PIPE,\n"
+        "            stdout=subprocess.DEVNULL,\n"
+        "            stderr=stderr_log,\n"
+        "        )\n"
+        "        return_code = proc.wait()\n"
+        "        stderr_log.write(f'\\n[mem setup] mem serve exited with code {return_code}\\n')\n"
+        "        stderr_log.flush()\n"
+        "except BaseException:\n"
+        "    with log_path.open('a', encoding='utf-8') as stderr_log:\n"
+        "        import traceback\n"
+        "        stderr_log.write('\\n[mem setup] supervisor failed while starting mem serve\\n')\n"
+        "        traceback.print_exc(file=stderr_log)\n"
+        "        stderr_log.flush()\n"
+        "    raise\n"
     )
     kwargs: dict[str, object] = {
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
     }
+    log_handle = log_path.open("a", encoding="utf-8")
     if platform == "win32":
         creation_flags = 0
         creation_flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
@@ -111,10 +122,14 @@ def start_hidden_mcp_server(
         kwargs["creationflags"] = creation_flags
     else:
         kwargs["start_new_session"] = True
-    return subprocess.Popen(
-        [sys.executable, "-c", supervisor_code, resolved_program, str(log_path)],
-        **kwargs,  # type: ignore[arg-type]
-    )
+    try:
+        kwargs["stderr"] = log_handle
+        return subprocess.Popen(
+            [sys.executable, "-c", supervisor_code, resolved_program, str(log_path)],
+            **kwargs,  # type: ignore[arg-type]
+        )
+    finally:
+        log_handle.close()
 
 
 def open_serve_in_new_terminal(

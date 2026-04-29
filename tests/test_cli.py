@@ -48,6 +48,51 @@ def test_serve_help_lists_launch_options() -> None:
     assert "stop" in result.output
 
 
+def test_dashboard_help_survives_view_option(monkeypatch) -> None:
+    def fail_launch_dashboard(*args, **kwargs):
+        raise AssertionError("_launch_dashboard should not run for --help")
+
+    monkeypatch.setattr("mem.cli._launch_dashboard", fail_launch_dashboard)
+    runner = CliRunner()
+    result = runner.invoke(app, ["dashboard", "--view", "--help"])
+
+    assert result.exit_code == 0
+    assert "Usage: mem dashboard" in result.output
+    assert "summary" in result.output
+    assert "detail" in result.output
+    assert "both" in result.output
+
+
+def test_dashboard_view_option_accepts_omitted_value(monkeypatch) -> None:
+    captured = {}
+
+    def fake_launch_dashboard(view: str = "both") -> None:
+        captured["view"] = view
+
+    monkeypatch.setattr("mem.cli._launch_dashboard", fake_launch_dashboard)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["dashboard", "--view"])
+
+    assert result.exit_code == 0
+    assert captured["view"] == "both"
+
+
+def test_dashboard_view_option_accepts_explicit_value(monkeypatch) -> None:
+    captured = {}
+
+    def fake_launch_dashboard(view: str = "both") -> None:
+        captured["view"] = view
+
+    monkeypatch.setattr("mem.cli._launch_dashboard", fake_launch_dashboard)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["dashboard", "--view", "detail"])
+
+    assert result.exit_code == 0
+    assert captured["view"] == "detail"
+
+
 def test_serve_autostart_option_invokes_installer(monkeypatch) -> None:
     called = {"install": False}
 
@@ -201,6 +246,42 @@ def test_setup_command_invokes_installer(monkeypatch) -> None:
     assert called["install"] is True
     assert called["start"] is True
     assert "MCP setup complete" in result.output
+
+
+def test_setup_command_rolls_back_autostart_on_start_failure(monkeypatch, tmp_path) -> None:
+    called = {"install": False, "remove": False, "start": False}
+
+    def fake_install_launch_agent():
+        called["install"] = True
+        return "/tmp/com.mem.cli.mcp.plist"
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    def fake_start_hidden_mcp_server(program=None, platform_name=None, stderr_log_path=None):
+        called["start"] = True
+        return FakeProcess()
+
+    def fake_remove_launch_agent():
+        called["remove"] = True
+        return True
+
+    monkeypatch.setattr("mem.cli.install_launch_agent", fake_install_launch_agent)
+    monkeypatch.setattr("mem.cli.start_hidden_mcp_server", fake_start_hidden_mcp_server)
+    monkeypatch.setattr("mem.cli.remove_launch_agent", fake_remove_launch_agent)
+    monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: tmp_path / "mcp-serve.stderr.log")
+    monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: False)
+    monkeypatch.setattr("mem.cli._tail_text", lambda path, max_lines=20: "")
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["setup"])
+
+    assert result.exit_code == 1
+    assert called["install"] is True
+    assert called["start"] is True
+    assert called["remove"] is True
+    assert "No error trace was captured." in result.output
 
 
 def test_start_and_stop_commands(monkeypatch) -> None:

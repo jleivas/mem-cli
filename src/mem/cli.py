@@ -677,16 +677,22 @@ def _launch_dashboard(view: str = "both") -> None:
 
 @app.command(rich_help_panel=f"[bold {ACCENT_PINK}]Monitor[/]")
 def dashboard(
-    view: str = typer.Option(
-        "both",
+    view: str | None = typer.Option(
+        None,
         "--view",
         "-v",
-        help="Dashboard view mode: summary, detail, or both.",
+        help=(
+            "Dashboard view mode. Available values: summary, detail, both. "
+            "Use '--view' alone to default to both."
+        ),
         case_sensitive=False,
+        flag_value="both",
+        show_default="both",
+        metavar="summary|detail|both",
     ),
 ) -> None:
     """Open a [bold #F98C2B]live token dashboard[/] in the terminal."""
-    normalized_view = view.lower()
+    normalized_view = (view or "both").lower()
     if normalized_view not in {"summary", "detail", "both"}:
         raise typer.BadParameter("view must be one of: summary, detail, both")
     _launch_dashboard(normalized_view)
@@ -1964,8 +1970,13 @@ def setup() -> None:
 
     autostart_path = install_launch_agent()
     log_path = _mcp_serve_log_path()
-    _process = start_hidden_mcp_server(stderr_log_path=log_path)
+    try:
+        _process = start_hidden_mcp_server(stderr_log_path=log_path)
+    except BaseException:
+        remove_launch_agent()
+        raise
     if not _wait_for_mcp_server_running():
+        remove_launch_agent()
         trace = _tail_text(log_path)
         console.print(Panel.fit(
             Text.assemble(
