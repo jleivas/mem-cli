@@ -14,6 +14,7 @@ from mem.mcp.server import (
     monitor_start,
     monitor_status,
     monitor_stop,
+    run,
 )
 from mem.models.memory import Memory
 from mem.models.agent_status import AgentStatus
@@ -226,3 +227,34 @@ class TestMonitorStop:
             result = monitor_stop()
         assert result["ok"] is False
         assert "No running monitor" in result["error"]
+
+
+class TestRun:
+    def test_continues_when_runtime_state_cannot_be_written(self, capsys):
+        store = MagicMock()
+        store.path = "/tmp/mcp-state.json"
+        store.save.side_effect = PermissionError(1, "Operation not permitted")
+        store.clear.return_value = None
+
+        with patch("mem.mcp.server.RuntimeStateStore", return_value=store), patch(
+            "mem.mcp.server.mcp.run"
+        ) as mocked_run:
+            run()
+
+        mocked_run.assert_called_once()
+        captured = capsys.readouterr()
+        assert "could not write runtime state" in captured.err
+
+    def test_logs_ready_before_entering_mcp_loop(self, caplog):
+        store = MagicMock()
+        store.path = "/tmp/mcp-state.json"
+        store.save.return_value = None
+        store.clear.return_value = None
+
+        with patch("mem.mcp.server.RuntimeStateStore", return_value=store), patch(
+            "mem.mcp.server.mcp.run"
+        ):
+            with caplog.at_level("INFO", logger="mem.mcp.server"):
+                run()
+
+        assert "mem MCP server ready" in caplog.text

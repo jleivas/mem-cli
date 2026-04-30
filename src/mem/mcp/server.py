@@ -9,6 +9,7 @@ Run via:
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -18,6 +19,9 @@ from ..services.memory_service import MemoryService
 from ..services.process_registry import ProcessRegistry
 from ..storage.runtime_state import RuntimeStateStore
 from ..storage.token_snapshot import TokenSnapshotStore
+from ..utils.logging import configure_logging
+
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "mem",
@@ -218,14 +222,26 @@ def run() -> None:
     from ..storage.runtime_state import RuntimeState, RuntimeStateStore
     from ..utils.time import utc_now
 
+    configure_logging()
     state_store = RuntimeStateStore(get_mcp_state_path())
-    state_store.save(RuntimeState(
+    state = RuntimeState(
         running=True,
         pid=os.getpid(),
         started_at=utc_now(),
         last_updated=utc_now(),
-    ))
+    )
     try:
+        state_store.save(state)
+    except OSError:
+        logger.exception(
+            "mem MCP server could not write runtime state to %s; continuing without status tracking.",
+            state_store.path,
+        )
+    try:
+        logger.info("mem MCP server ready")
         mcp.run()
     finally:
-        state_store.clear()
+        try:
+            state_store.clear()
+        except OSError:
+            logger.debug("Could not clear MCP runtime state", exc_info=True)

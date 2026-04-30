@@ -54,6 +54,10 @@ def get_runtime_dir() -> Path:
     return get_app_home() / "runtime"
 
 
+def get_log_path() -> Path:
+    return get_runtime_dir() / "mem-cli.log"
+
+
 def get_runtime_state_path() -> Path:
     return get_runtime_dir() / "state.json"
 

@@ -45,7 +45,15 @@ def test_serve_help_lists_launch_options() -> None:
     assert "--background" in result.output
     assert "--new-terminal" in result.output
     assert "--autostart" in result.output
+    assert "status" in result.output
     assert "stop" in result.output
+
+
+def test_help_lists_logs_command() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "logs" in result.output
 
 
 def test_dashboard_help_survives_view_option(monkeypatch) -> None:
@@ -91,6 +99,43 @@ def test_dashboard_view_option_accepts_explicit_value(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert captured["view"] == "detail"
+
+
+def test_logs_command_reads_log_file(monkeypatch, tmp_path) -> None:
+    log_path = tmp_path / "mem-cli.log"
+    log_path.write_text("first line\nsecond line\n", encoding="utf-8")
+    monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: log_path)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["logs"])
+
+    assert result.exit_code == 0
+    assert "first line" in result.output
+    assert "second line" in result.output
+
+
+def test_logs_follow_option_streams_updates(monkeypatch, tmp_path) -> None:
+    log_path = tmp_path / "mem-cli.log"
+    log_path.write_text("first line\n", encoding="utf-8")
+    monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: log_path)
+
+    calls = {"count": 0}
+
+    def fake_sleep(_seconds):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            log_path.write_text("first line\nsecond line\n", encoding="utf-8")
+        else:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("mem.cli.time.sleep", fake_sleep)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["logs", "-f"])
+
+    assert result.exit_code == 0
+    assert "first line" in result.output
+    assert "second line" in result.output
 
 
 def test_serve_autostart_option_invokes_installer(monkeypatch) -> None:
@@ -155,6 +200,75 @@ def test_mcp_stop_only_stops_running_server(monkeypatch) -> None:
     assert called["stop"] is True
     assert called["remove"] is False
     assert "MCP server stopped" in result.output
+
+
+def test_serve_status_command_reports_runtime(monkeypatch, tmp_path) -> None:
+    log_path = tmp_path / "mem-cli.log"
+    log_path.write_text("2026-04-29 13:29:14,468 INFO mem.mcp.server: mem MCP server ready\n", encoding="utf-8")
+
+    class FakeState:
+        pid = 65402
+        running = True
+        started_at = None
+        last_updated = None
+
+    class FakeRegistry:
+        def load_state(self):
+            return FakeState()
+
+        def is_pid_alive(self, pid: int) -> bool:
+            return True
+
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: FakeRegistry())
+    monkeypatch.setattr("mem.cli.launch_agent_installed", lambda: True)
+    monkeypatch.setattr("mem.cli.launch_agent_path", lambda: tmp_path / "com.mem.cli.mcp.plist")
+    monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: log_path)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve", "status"])
+
+    assert result.exit_code == 0
+    assert "MCP Server Status" in result.output
+    assert "running" in result.output
+    assert "Ready marker" in result.output
+    assert "seen" in result.output
+
+
+def test_serve_logs_selected_stdio_path(monkeypatch) -> None:
+    monkeypatch.setattr("mem.cli.sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: type("R", (), {"load_state": lambda self: None})())
+
+    called = {"run": False}
+
+    def fake_run():
+        called["run"] = True
+
+    monkeypatch.setattr("mem.cli._serve_tty", lambda: (_ for _ in ()).throw(AssertionError("TTY path should not run")))
+    monkeypatch.setattr("mem.mcp.server.run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve"])
+
+    assert result.exit_code == 0
+    assert called["run"] is False
+
+
+def test_serve_logs_selected_tty_path(monkeypatch) -> None:
+    monkeypatch.setattr("mem.cli.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: type("R", (), {"load_state": lambda self: None})())
+
+    called = {"tty": False}
+
+    def fake_serve_tty():
+        called["tty"] = True
+
+    monkeypatch.setattr("mem.cli._serve_tty", fake_serve_tty)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["serve"])
+
+    assert result.exit_code == 0
+    assert called["tty"] is True
 
 
 def test_serve_background_option_invokes_detached_launcher(monkeypatch) -> None:
@@ -343,12 +457,39 @@ def test_status_shows_running_mcp_server(monkeypatch) -> None:
         def load_state(self):
             return FakeState()
 
+        def is_pid_alive(self, pid: int) -> bool:
+            return True
+
     monkeypatch.setattr("mem.cli._registry", lambda: FakeRegistry())
     monkeypatch.setattr("mem.cli._mcp_registry", lambda: FakeRegistry())
 
     runner = CliRunner()
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 0
+    assert "running" in result.output
+
+
+def test_status_marks_stale_mcp_server(monkeypatch) -> None:
+    class FakeState:
+        running = True
+        pid = 4242
+        started_at = None
+        last_updated = None
+
+    class FakeRegistry:
+        def load_state(self):
+            return FakeState()
+
+        def is_pid_alive(self, pid: int) -> bool:
+            return False
+
+    monkeypatch.setattr("mem.cli._registry", lambda: FakeRegistry())
+    monkeypatch.setattr("mem.cli._mcp_registry", lambda: FakeRegistry())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0
+    assert "stale" in result.output
 
 
 def test_menu_quit_returns_cleanly(monkeypatch) -> None:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import cast
 
@@ -17,6 +19,7 @@ from rich.text import Text
 from . import APP_NAME, APP_VERSION
 from .config import get_default_claude_jsonl_path
 from .config import get_default_codex_jsonl_path
+from .config import get_log_path
 from .config import get_mcp_state_path
 from .config import get_runtime_dir
 from .config import get_runtime_state_path
@@ -46,6 +49,7 @@ from .services.process_registry import ProcessRegistry
 from .storage.runtime_state import RuntimeStateStore
 from .ui.dashboard import live_dashboard
 from .ui.dashboard import DashboardViewMode
+from .utils.logging import configure_logging
 
 app = typer.Typer(
     add_completion=False,
@@ -58,6 +62,7 @@ serve_app = typer.Typer(
     help="[bold #E93A7D]Start[/] the local [bold #F98C2B]MCP server[/] over stdio.",
 )
 console = Console()
+logger = logging.getLogger(__name__)
 CLI_NAME = "mem"
 ACCENT_PINK = "#E93A7D"
 ACCENT_CORAL = "#F25C5C"
@@ -132,6 +137,8 @@ def _bootstrap(
     ),
 ) -> None:
     _bootstrap_env()
+    configure_logging()
+    logger.debug("CLI bootstrap complete")
     if version:
         console.print(_render_version_panel())
         raise typer.Exit()
@@ -158,7 +165,7 @@ def _wait_for_mcp_server_running(timeout: float = 10.0, interval: float = 0.2) -
 
 
 def _mcp_serve_log_path() -> Path:
-    return get_runtime_dir() / "mcp-serve.stderr.log"
+    return get_log_path()
 
 
 def _tail_text(path: Path, max_lines: int = 20) -> str:
@@ -167,6 +174,38 @@ def _tail_text(path: Path, max_lines: int = 20) -> str:
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     tail = lines[-max_lines:]
     return "\n".join(tail).strip()
+
+
+def _stream_log_file(path: Path, follow: bool) -> None:
+    if not path.exists():
+        console.print(Panel.fit(
+            f"No log file found at {path}.",
+            border_style=ACCENT_YELLOW,
+        ))
+        return
+
+    def _emit_new_text(previous_size: int) -> int:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            handle.seek(previous_size)
+            chunk = handle.read()
+            if chunk:
+                console.print(chunk, end="")
+            return handle.tell()
+
+    position = 0
+    try:
+        position = _emit_new_text(position)
+        if not follow:
+            return
+
+        while True:
+            time.sleep(0.5)
+            size = path.stat().st_size if path.exists() else 0
+            if size < position:
+                position = 0
+            position = _emit_new_text(position)
+    except KeyboardInterrupt:
+        return
 
 
 _LOGO_LINES = [
@@ -449,6 +488,15 @@ def _status_action() -> _ActionResult:
             else Text("stopped", style="dim")
         )
 
+    def _mcp_state_text() -> Text:
+        if not mcp_state:
+            return Text("stopped", style="dim")
+        if mcp_state.running and mcp_state.pid and _mcp_registry().is_pid_alive(mcp_state.pid):
+            return Text("running", style=f"bold {ACCENT_PINK}")
+        if mcp_state.running:
+            return Text("stale", style=f"bold {ACCENT_CORAL}")
+        return Text("stopped", style="dim")
+
     # Monitor row
     if monitor_state:
         table.add_row(
@@ -464,7 +512,7 @@ def _status_action() -> _ActionResult:
     if mcp_state:
         table.add_row(
             "MCP server",
-            _state_text(mcp_state.running),
+            _mcp_state_text(),
             str(mcp_state.pid) if mcp_state.pid else "-",
             mcp_state.started_at.isoformat() if mcp_state.started_at else "-",
         )
@@ -481,6 +529,57 @@ def _status_action() -> _ActionResult:
     any_running = (monitor_state and monitor_state.running) or (mcp_state and mcp_state.running)
     return _ActionResult(
         title="Status",
+        body=table,
+        border_style=ACCENT_PINK if any_running else ACCENT_YELLOW,
+    )
+
+
+def _mcp_status_action() -> _ActionResult:
+    mcp_state = _mcp_registry().load_state()
+    autostart_enabled = launch_agent_installed()
+    log_path = _mcp_serve_log_path()
+    ready_seen = "mem MCP server ready" in _tail_text(log_path, max_lines=200)
+
+    table = Table(title="MCP Runtime Status", expand=True)
+    table.add_column("Service", style=ACCENT_ORANGE, no_wrap=True)
+    table.add_column("State", no_wrap=True)
+    table.add_column("PID", style="dim", no_wrap=True)
+    table.add_column("Started", style="dim", no_wrap=True)
+
+    if mcp_state and mcp_state.running and mcp_state.pid and _mcp_registry().is_pid_alive(mcp_state.pid):
+        state_text = Text("running", style=f"bold {ACCENT_PINK}")
+    elif mcp_state and mcp_state.running:
+        state_text = Text("stale", style=f"bold {ACCENT_CORAL}")
+    else:
+        state_text = Text("stopped", style="dim")
+
+    if mcp_state:
+        table.add_row(
+            "MCP server",
+            state_text,
+            str(mcp_state.pid) if mcp_state.pid else "-",
+            mcp_state.started_at.isoformat() if mcp_state.started_at else "-",
+        )
+    else:
+        table.add_row("MCP server", state_text, "-", "-")
+
+    table.add_row(
+        "LaunchAgent",
+        Text("enabled", style=f"bold {ACCENT_PINK}") if autostart_enabled else Text("disabled", style="dim"),
+        "-",
+        str(launch_agent_path()),
+    )
+
+    table.add_row(
+        "Ready marker",
+        Text("seen", style=f"bold {ACCENT_PINK}") if ready_seen else Text("not seen", style="dim"),
+        "-",
+        str(log_path),
+    )
+
+    any_running = bool(mcp_state and mcp_state.running)
+    return _ActionResult(
+        title="MCP Server Status",
         body=table,
         border_style=ACCENT_PINK if any_running else ACCENT_YELLOW,
     )
@@ -705,6 +804,21 @@ def dashboard(
 def version() -> None:
     """Print the current [bold #F7B500]version[/]."""
     console.print(_render_version_panel())
+
+
+@app.command(rich_help_panel=f"[bold {ACCENT_YELLOW}]Other[/]")
+def logs(
+    follow: bool = typer.Option(
+        False,
+        "-f",
+        "--follow",
+        help="Follow the log in real time.",
+    ),
+) -> None:
+    """View the mem-cli log file."""
+    log_path = _mcp_serve_log_path()
+    logger.info("Opening log file at %s", log_path)
+    _stream_log_file(log_path, follow)
 
 
 # ---------------------------------------------------------------------------
@@ -1836,6 +1950,14 @@ def serve(
       }
     """
     import sys
+    logger.info(
+        "serve invoked (autostart=%s, disable_autostart=%s, background=%s, new_terminal=%s)",
+        autostart,
+        disable_autostart,
+        background,
+        new_terminal,
+    )
+    logger.info("serve stdin.isatty()=%s", sys.stdin.isatty())
     if ctx.invoked_subcommand is not None:
         selected_modes = [autostart, disable_autostart, background, new_terminal]
         if any(selected_modes):
@@ -1945,8 +2067,10 @@ def serve(
         )))
         return
     if sys.stdin.isatty():
+        logger.info("serve entering TTY dashboard path")
         _serve_tty()
     else:
+        logger.info("serve entering stdio MCP path")
         from .mcp.server import run as _run_mcp
         _run_mcp()
 
@@ -1958,9 +2082,17 @@ def stop() -> None:
     console.print(_render_action_screen(result))
 
 
+@serve_app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def serve_status() -> None:
+    """Show MCP server [bold #F7B500]status[/]."""
+    result = _mcp_status_action()
+    console.print(_render_action_screen(result))
+
+
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def setup() -> None:
     """Enable autostart and start the MCP server now on supported platforms."""
+    logger.info("setup invoked")
     if not is_supported_platform():
         console.print(Panel.fit(
             "Autostart setup is only available on macOS, Linux, and Windows.",
