@@ -11,6 +11,22 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.2] — 2026-06-08
+
+### Fixed
+
+- Fixed GitHub Actions release workflow: added `scripts/mem_entry.py` as a thin PyInstaller entry point using absolute imports, replacing the direct `src/mem/cli.py` target that caused `ImportError: attempted relative import with no known parent package` when running `mem --version` on the compiled binary.
+
+---
+
+## [0.1.1] — 2026-06-08
+
+### Fixed
+
+- Fixed release binary compilation for Linux and macOS: added `scripts/mem_entry.py` as a thin PyInstaller entry point that uses absolute imports, replacing the direct `src/mem/cli.py` target that caused `ImportError: attempted relative import with no known parent package` at startup.
+
+---
+
 ## [0.1.0] — 2026-04-21
 
 ### Added
