@@ -40,6 +40,8 @@ dev = [
 ]
 release = [
   "build==1.2.2",
+  "pyinstaller>=6.0",
+  "pyinstaller-hooks-contrib>=2024.0",
 ]
 
 [project.scripts]
