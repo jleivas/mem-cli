@@ -41,7 +41,7 @@ def build() -> Path:
             "--hidden-import", "typer",
             "--hidden-import", "rich",
             "--noconfirm",
-            str(ROOT / "src" / "mem" / "cli.py"),
+            str(ROOT / "scripts" / "mem_entry.py"),
         ],
         cwd=ROOT,
         check=True,

@@ -30,7 +30,7 @@ When a tag matching `v*` is pushed, `.github/workflows/release.yml`:
 
 ## Cutting a Release
 
-### Step 1 — Update CHANGELOG.md
+### Step 1 — Add the new version to CHANGELOG.md
 
 Add a new version section at the top of the released entries:
 
@@ -44,28 +44,22 @@ Add a new version section at the top of the released entries:
 - ...
 ```
 
-Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions. The `[Unreleased]` section stays at the top for ongoing work.
+Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions. The `[Unreleased]` section stays at the top for ongoing work. The version must follow `MAJOR.MINOR.PATCH` — see [Version Conventions](#version-conventions).
 
-### Step 2 — Sync pyproject.toml
-
-```bash
-python scripts/sync_version.py
-```
-
-This reads the latest version from `CHANGELOG.md` and writes it into `pyproject.toml`. The binary and `mem --version` always read from `CHANGELOG.md` directly, but keeping `pyproject.toml` in sync is good practice.
-
-### Step 3 — Commit, tag, and push
+### Step 2 — Run the release script
 
 ```bash
-git add CHANGELOG.md pyproject.toml
-git commit -m "release: v<version>"
-git tag v<version>
-git push origin master --tags
+bash scripts/release.sh
 ```
 
-Pushing the tag triggers the CI release workflow. That's it — CI handles the rest.
+The script:
+1. Reads the latest version from `CHANGELOG.md`.
+2. Checks whether a git tag for that version already exists.
+   - **Tag exists** → exits and prompts you to add a new version to `CHANGELOG.md` first.
+   - **Tag does not exist** → syncs `pyproject.toml`, commits, creates the tag, and pushes.
+3. Pushing the tag triggers the CI release workflow.
 
-### Step 4 — Monitor CI
+### Step 3 — Monitor CI
 
 Watch the run at `https://github.com/jleivas/mem-cli/actions`. The workflow:
 
