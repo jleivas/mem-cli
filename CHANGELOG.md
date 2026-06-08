@@ -11,6 +11,18 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.4] — 2026-06-08
+
+### Changed
+
+- Intel Mac (`brew install mem-cli`) now installs from source via `pip` into an isolated virtualenv instead of a pre-built binary. This eliminates the dependency on scarce GitHub-hosted `macos-12`/`macos-13` Intel runners, which caused releases to stall indefinitely waiting for a runner.
+
+### Fixed
+
+- Removed `mem-darwin-amd64` from the CI release matrix. All three remaining platforms (macOS ARM64, Linux amd64, Linux arm64) use consistently available runners and are unaffected.
+
+---
+
 ## [0.1.3] — 2026-06-08
 
 ### Fixed
