@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 CHANGELOG="$ROOT/CHANGELOG.md"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -16,6 +16,18 @@ CHANGELOG="$ROOT/CHANGELOG.md"
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 bold()  { printf '\033[1m%s\033[0m\n'  "$*"; }
+
+# ── check for uncommitted changes ────────────────────────────────────────────
+
+if ! git -C "$ROOT" diff --quiet || ! git -C "$ROOT" diff --cached --quiet; then
+  red "No se puede subir tag con cambios sin comitear."
+  echo ""
+  echo "Archivos con cambios pendientes:"
+  git -C "$ROOT" status --short
+  echo ""
+  echo "Commitea o descarta los cambios antes de volver a ejecutar este script."
+  exit 1
+fi
 
 # ── read latest released version from CHANGELOG.md ───────────────────────────
 

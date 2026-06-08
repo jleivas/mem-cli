@@ -49,7 +49,7 @@ Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions. The
 ### Step 2 — Run the release script
 
 ```bash
-bash scripts/release.sh
+bash release.sh
 ```
 
 The script:

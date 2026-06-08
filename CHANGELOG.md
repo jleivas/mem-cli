@@ -11,6 +11,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.3] — 2026-06-08
+
+### Fixed
+
+- Fixed GitHub Actions release workflow: PyInstaller was targeting `src/mem/cli.py` directly, which runs as `__main__` and cannot resolve relative imports. Added `scripts/mem_entry.py` as a thin entry point that imports `mem.cli` with absolute imports so the compiled binary runs correctly on Linux and macOS.
+
+---
+
 ## [0.1.2] — 2026-06-08
 
 ### Fixed

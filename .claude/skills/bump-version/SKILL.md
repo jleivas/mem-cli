@@ -78,5 +78,5 @@ Replace `PREV_VERSION` with the version you just replaced. The result should be 
 ## What NOT to do
 
 - Do not modify `src/mem/version.py` — it reads the version from CHANGELOG.md at runtime.
-- Do not run `scripts/release.sh` — that is the step after the bump; the user triggers it.
+- Do not run `release.sh` — that is the step after the bump; the user triggers it from the project root.
 - Do not create git commits unless the user explicitly asks.
