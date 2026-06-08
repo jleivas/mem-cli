@@ -18,8 +18,6 @@ jobs:
             asset: mem-darwin-arm64
           - os: ubuntu-latest
             asset: mem-linux-amd64
-          - os: ubuntu-24.04-arm
-            asset: mem-linux-arm64
 
     steps:
       - uses: actions/checkout@v4

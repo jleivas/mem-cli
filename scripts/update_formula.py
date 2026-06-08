@@ -40,14 +40,8 @@ class MemCli < Formula
   end
 
   on_linux do
-    on_arm do
-      url "{base_url}/mem-linux-arm64.tar.gz"
-      sha256 "{linux_arm64}"
-    end
-    on_intel do
-      url "{base_url}/mem-linux-amd64.tar.gz"
-      sha256 "{linux_amd64}"
-    end
+    url "{base_url}/mem-linux-amd64.tar.gz"
+    sha256 "{linux_amd64}"
   end
 
   def install
@@ -96,7 +90,6 @@ def main() -> None:
         source_url=source_url,
         darwin_arm64=sha256_file(artifacts / "mem-darwin-arm64.tar.gz"),
         source_sha256=sha256_url(source_url),
-        linux_arm64=sha256_file(artifacts / "mem-linux-arm64.tar.gz"),
         linux_amd64=sha256_file(artifacts / "mem-linux-amd64.tar.gz"),
     ), end="")
 

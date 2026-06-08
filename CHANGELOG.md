@@ -11,6 +11,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.5] — 2026-06-08
+
+### Changed
+
+- Removed `mem-linux-arm64` from the CI release matrix. The Linux binary now targets only `amd64`, eliminating the `mem-linux-arm64.tar.gz` artifact that exceeded GitHub's 2 GB release asset limit.
+
+---
+
 ## [0.1.4] — 2026-06-08
 
 ### Changed
