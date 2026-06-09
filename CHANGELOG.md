@@ -11,6 +11,18 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.7] — 2026-06-09
+
+### Fixed
+
+- `mem --version` now returns the correct version in the PyInstaller macOS ARM64 binary instead of `0.0.0`.
+- Added `--copy-metadata mem-cli` to the PyInstaller invocation so `importlib.metadata.version()` resolves correctly inside frozen binaries.
+- Added a baked-version fallback: `build_binary.py` writes `_baked_version.py` before bundling as a compile-time constant, eliminating any dependency on metadata or filesystem lookups at runtime.
+- Version resolution chain updated: `importlib.metadata` → baked constant → CHANGELOG.md walk (now also checks `sys._MEIPASS` for frozen bundles).
+- Strengthened `test_version_contract.py`: version must now match `^\d+\.\d+\.\d+$` and must not equal `"0.0.0"`.
+
+---
+
 ## [0.1.6] — 2026-06-08
 
 ### Changed

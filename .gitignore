@@ -11,4 +11,5 @@ build/
 *.pyd
 .coverage
 htmlcov/
+src/mem/_baked_version.py
 
