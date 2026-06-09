@@ -47,7 +47,7 @@ class MemCli < Formula
   def install
     if OS.mac? && Hardware::CPU.intel?
       system "python3.11", "-m", "venv", libexec/"venv"
-      system "\#{{libexec}}/venv/bin/pip", "install", "."
+      system "#{{libexec}}/venv/bin/pip", "install", "."
       bin.install_symlink libexec/"venv/bin/mem"
     else
       libexec.install Dir["*"]
