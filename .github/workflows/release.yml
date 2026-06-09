@@ -79,10 +79,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            artifacts/*.tar.gz \
-            --title "mem-cli v${{ steps.version.outputs.version }}" \
-            --generate-notes
+          VERSION="v${{ steps.version.outputs.version }}"
+          if gh release view "$VERSION" > /dev/null 2>&1; then
+            echo "Release $VERSION already exists, skipping creation."
+          else
+            gh release create "$VERSION" \
+              artifacts/*.tar.gz \
+              --title "mem-cli $VERSION" \
+              --generate-notes
+          fi
 
       - name: Update Homebrew formula
         env:
