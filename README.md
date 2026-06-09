@@ -86,7 +86,7 @@ pipx install .
 You can also install a released wheel artifact directly:
 
 ```bash
-pipx install dist/mem_cli-0.1.5-py3-none-any.whl
+pipx install dist/mem_cli-0.1.6-py3-none-any.whl
 ```
 
 ### 3. Verify the install

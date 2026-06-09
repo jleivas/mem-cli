@@ -11,6 +11,16 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.6] — 2026-06-08
+
+### Changed
+
+- Replaced `sentence-transformers` (PyTorch, ~1.5 GB) with a pure-Python TF + character-bigram implementation in `embedding_service.py`. Semantic search now uses feature hashing over word tokens and character bigrams — no external ML dependencies, always available, binary size drops to ~80 MB.
+- Removed `sentence-transformers` from required dependencies in `pyproject.toml`.
+- Cleaned up `build_binary.py`: removed `--collect-submodules` and `--exclude-module` flags that were added to work around the ML library size.
+
+---
+
 ## [0.1.5] — 2026-06-08
 
 ### Changed
