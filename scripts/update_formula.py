@@ -5,20 +5,15 @@ Usage:
 
 Prints the updated formula to stdout. Redirect to the formula file:
     python scripts/update_formula.py 0.2.0 artifacts/ > Formula/mem-cli.rb
-
-ARM/Linux platforms use pre-built binaries from the release artifacts.
-Intel Mac uses the GitHub source archive + pip install (no binary runner needed).
 """
 
 from __future__ import annotations
 
 import hashlib
 import sys
-import urllib.request
 from pathlib import Path
 
 GITHUB_REPO = "jleivas/mem-cli"
-GITHUB_ARCHIVE_URL = "https://github.com/{repo}/archive/refs/tags/v{version}.tar.gz"
 
 FORMULA_TEMPLATE = """\
 class MemCli < Formula
@@ -27,18 +22,14 @@ class MemCli < Formula
   version "{version}"
   license "MIT"
 
-  include Language::Python::Virtualenv
-
   on_macos do
     on_arm do
       url "{base_url}/mem-darwin-arm64.tar.gz"
       sha256 "{darwin_arm64}"
     end
     on_intel do
-      url "{source_url}"
-      sha256 "{source_sha256}"
-      depends_on "python@3.11"
-      depends_on "rust" => :build
+      url "{base_url}/mem-darwin-amd64.tar.gz"
+      sha256 "{darwin_amd64}"
     end
   end
 
@@ -48,20 +39,8 @@ class MemCli < Formula
   end
 
   def install
-    if OS.mac? && Hardware::CPU.intel?
-      virtualenv_install_with_resources
-      bin.install_symlink libexec/"venv/bin/mem"
-    else
-      libexec.install Dir["*"]
-      executable = libexec/"mem"
-      unless executable.exist?
-        candidate = Dir[libexec/"**/mem"].find {{ |path| File.file?(path) }}
-        executable = Pathname(candidate) if candidate
-      end
-      odie "mem executable was not found in the release artifact" unless executable&.exist?
-      chmod 0755, executable
-      bin.install_symlink executable => "mem"
-    end
+    libexec.install Dir["*"]
+    bin.install_symlink libexec/"mem"
   end
 
   test do
@@ -72,13 +51,8 @@ end
 """
 
 
-def sha256_file(path: Path) -> str:
+def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def sha256_url(url: str) -> str:
-    with urllib.request.urlopen(url) as response:
-        return hashlib.sha256(response.read()).hexdigest()
 
 
 def main() -> None:
@@ -89,18 +63,14 @@ def main() -> None:
     version = sys.argv[1].lstrip("v")
     artifacts = Path(sys.argv[2])
     base_url = f"https://github.com/{GITHUB_REPO}/releases/download/v{version}"
-    source_url = GITHUB_ARCHIVE_URL.format(repo=GITHUB_REPO, version=version)
-
-    print(f"Fetching source archive sha256 from {source_url} ...", file=sys.stderr)
 
     print(FORMULA_TEMPLATE.format(
         repo=GITHUB_REPO,
         version=version,
         base_url=base_url,
-        source_url=source_url,
-        darwin_arm64=sha256_file(artifacts / "mem-darwin-arm64.tar.gz"),
-        source_sha256=sha256_url(source_url),
-        linux_amd64=sha256_file(artifacts / "mem-linux-amd64.tar.gz"),
+        darwin_arm64=sha256(artifacts / "mem-darwin-arm64.tar.gz"),
+        darwin_amd64=sha256(artifacts / "mem-darwin-amd64.tar.gz"),
+        linux_amd64=sha256(artifacts / "mem-linux-amd64.tar.gz"),
     ), end="")
 
 

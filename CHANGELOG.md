@@ -10,6 +10,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.12] — 2026-06-12
+
+### Fixed
+
+- Added Intel Mac (`macos-13`) binary to the CI release matrix so `brew install` no longer attempts to compile from source on Intel Macs.
+- Simplified Homebrew formula to use pre-built binaries for all platforms, removing `Language::Python::Virtualenv` and resource blocks.
+
+---
 ## [0.1.11] — 2026-06-12
 
 ### Fixed
