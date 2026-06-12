@@ -27,6 +27,8 @@ class MemCli < Formula
   version "{version}"
   license "MIT"
 
+  include Language::Python::Virtualenv
+
   on_macos do
     on_arm do
       url "{base_url}/mem-darwin-arm64.tar.gz"
@@ -36,6 +38,7 @@ class MemCli < Formula
       url "{source_url}"
       sha256 "{source_sha256}"
       depends_on "python@3.11"
+      depends_on "rust" => :build
     end
   end
 
@@ -46,16 +49,23 @@ class MemCli < Formula
 
   def install
     if OS.mac? && Hardware::CPU.intel?
-      system "python3.11", "-m", "venv", libexec/"venv"
-      system "#{{libexec}}/venv/bin/pip", "install", "."
+      virtualenv_install_with_resources
       bin.install_symlink libexec/"venv/bin/mem"
     else
       libexec.install Dir["*"]
-      bin.install_symlink libexec/"mem"
+      executable = libexec/"mem"
+      unless executable.exist?
+        candidate = Dir[libexec/"**/mem"].find { |path| File.file?(path) }
+        executable = Pathname(candidate) if candidate
+      end
+      odie "mem executable was not found in the release artifact" unless executable&.exist?
+      chmod 0755, executable
+      bin.install_symlink executable => "mem"
     end
   end
 
   test do
+    ENV["MEM_HOME"] = testpath/".mem-cli"
     system bin/"mem", "--version"
   end
 end

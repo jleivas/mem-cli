@@ -130,6 +130,7 @@ def _bootstrap_env() -> None:
 
 @app.callback(invoke_without_command=True)
 def _bootstrap(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False,
         "--version",
@@ -138,11 +139,13 @@ def _bootstrap(
     ),
 ) -> None:
     _bootstrap_env()
-    configure_logging()
-    logger.debug("CLI bootstrap complete")
     if version:
         console.print(_render_version_panel())
         raise typer.Exit()
+    if ctx.invoked_subcommand == "version":
+        return
+    configure_logging()
+    logger.debug("CLI bootstrap complete")
 
 
 def _registry() -> ProcessRegistry:

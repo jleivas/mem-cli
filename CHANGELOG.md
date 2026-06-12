@@ -10,6 +10,18 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.9] — 2026-06-12
+
+### Changed
+
+- Updated the Homebrew formula generator to use `virtualenv_install_with_resources` for Intel macOS source installs.
+- Hardened Homebrew binary installs by locating the `mem` executable inside release artifacts, ensuring it is executable, and setting `MEM_HOME` during formula tests.
+
+### Fixed
+
+- `mem version` and `mem --version` now return version output without configuring logging.
+
+---
 
 ## [0.1.8] — 2026-06-12
 

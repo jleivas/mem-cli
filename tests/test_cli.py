@@ -22,11 +22,35 @@ def test_version_command() -> None:
     assert APP_VERSION in result.output
 
 
+def test_version_command_does_not_configure_logging(monkeypatch) -> None:
+    def fail_configure_logging():
+        raise AssertionError("version command should not configure logging")
+
+    monkeypatch.setattr("mem.cli.configure_logging", fail_configure_logging)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["version"])
+    assert result.exit_code == 0
+    assert APP_VERSION in result.output
+
+
 def test_root_version_option() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert APP_NAME in result.output
+    assert APP_VERSION in result.output
+
+
+def test_root_version_option_does_not_configure_logging(monkeypatch) -> None:
+    def fail_configure_logging():
+        raise AssertionError("--version should not configure logging")
+
+    monkeypatch.setattr("mem.cli.configure_logging", fail_configure_logging)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
     assert APP_VERSION in result.output
 
 
