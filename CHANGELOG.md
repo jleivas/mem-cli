@@ -10,6 +10,13 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.13] — 2026-06-12
+
+### Fixed
+
+- Use a single ARM64 macOS binary for all Macs (Intel + Apple Silicon via Rosetta 2), eliminating the unavailable `macos-13` CI runner dependency.
+
+---
 ## [0.1.12] — 2026-06-12
 
 ### Fixed
