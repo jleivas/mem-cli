@@ -11,6 +11,19 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.8] — 2026-06-12
+
+### Changed
+
+- Reused the same background MCP startup flow for `mem serve --background` and `mem setup`.
+- `mem setup` now renders the standard status action after enabling autostart and starting the MCP server.
+
+### Fixed
+
+- `mem setup` now rolls back autostart consistently when background server startup fails.
+
+---
+
 ## [0.1.7] — 2026-06-09
 
 ### Fixed

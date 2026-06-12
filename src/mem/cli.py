@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import logging
 import os
@@ -166,6 +167,34 @@ def _wait_for_mcp_server_running(timeout: float = 10.0, interval: float = 0.2) -
 
 def _mcp_serve_log_path() -> Path:
     return get_log_path()
+
+
+def _start_mcp_server_background(
+    failure_message: str = "MCP server failed to start.",
+    on_failure: Callable[[], object] | None = None,
+) -> None:
+    log_path = _mcp_serve_log_path()
+    try:
+        _process = start_hidden_mcp_server(stderr_log_path=log_path)
+    except BaseException:
+        if on_failure:
+            on_failure()
+        raise
+    if not _wait_for_mcp_server_running():
+        if on_failure:
+            on_failure()
+        trace = _tail_text(log_path)
+        console.print(Panel.fit(
+            Text.assemble(
+                (f"{failure_message}\n", "white"),
+                ("See log: ", "dim"),
+                (str(log_path), f"bold {ACCENT_YELLOW}"),
+                ("\n", ""),
+                (trace or "No error trace was captured.", "red"),
+            ),
+            border_style="red",
+        ))
+        raise typer.Exit(code=1)
 
 
 def _tail_text(path: Path, max_lines: int = 20) -> str:
@@ -2016,21 +2045,7 @@ def serve(
         )))
         return
     if background:
-        log_path = _mcp_serve_log_path()
-        process = start_hidden_mcp_server(stderr_log_path=log_path)
-        if not _wait_for_mcp_server_running():
-            trace = _tail_text(log_path)
-            console.print(Panel.fit(
-                Text.assemble(
-                    ("MCP server failed to start.\n", "white"),
-                    ("See log: ", "dim"),
-                    (str(log_path), f"bold {ACCENT_YELLOW}"),
-                    ("\n", ""),
-                    (trace or "No error trace was captured.", "red"),
-                ),
-                border_style="red",
-            ))
-            raise typer.Exit(code=1)
+        _start_mcp_server_background()
         console.print(_render_action_screen(_ActionResult(
             title="MCP server started in background",
             body=Panel.fit(
@@ -2100,39 +2115,13 @@ def setup() -> None:
         ))
         raise typer.Exit(code=1)
 
-    autostart_path = install_launch_agent()
-    log_path = _mcp_serve_log_path()
-    try:
-        _process = start_hidden_mcp_server(stderr_log_path=log_path)
-    except BaseException:
-        remove_launch_agent()
-        raise
-    if not _wait_for_mcp_server_running():
-        remove_launch_agent()
-        trace = _tail_text(log_path)
-        console.print(Panel.fit(
-            Text.assemble(
-                ("MCP setup enabled autostart, but the server failed to start.\n", "white"),
-                ("See log: ", "dim"),
-                (str(log_path), f"bold {ACCENT_YELLOW}"),
-                ("\n", ""),
-                (trace or "No error trace was captured.", "red"),
-            ),
-            border_style="red",
-        ))
-        raise typer.Exit(code=1)
-    console.print(_render_action_screen(_ActionResult(
-        title="MCP setup complete",
-        body=Panel.fit(
-            Text.assemble(
-                ("Autostart enabled at ", "white"),
-                (str(autostart_path), f"bold {ACCENT_YELLOW}"),
-                ("\nThe MCP server is now running and will start automatically at login.", "dim"),
-            ),
-            border_style=ACCENT_PINK,
-        ),
-        border_style=ACCENT_PINK,
-    )))
+    install_launch_agent()
+    _start_mcp_server_background(
+        failure_message="MCP setup enabled autostart, but the server failed to start.",
+        on_failure=remove_launch_agent,
+    )
+    result = _status_action()
+    console.print(_render_action_screen(result))
 
 
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")

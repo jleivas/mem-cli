@@ -282,6 +282,7 @@ def test_serve_background_option_invokes_detached_launcher(monkeypatch) -> None:
         return FakeProcess()
 
     monkeypatch.setattr("mem.cli.start_hidden_mcp_server", fake_start_hidden_mcp_server)
+    monkeypatch.setattr("mem.cli.configure_logging", lambda: None)
     monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: Path("/tmp/mem-serve.stderr.log"))
     monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: True)
 
@@ -350,6 +351,7 @@ def test_setup_command_invokes_installer(monkeypatch) -> None:
 
     monkeypatch.setattr("mem.cli.install_launch_agent", fake_install_launch_agent)
     monkeypatch.setattr("mem.cli.start_hidden_mcp_server", fake_start_hidden_mcp_server)
+    monkeypatch.setattr("mem.cli.configure_logging", lambda: None)
     monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: Path("/tmp/mem-serve.stderr.log"))
     monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: True)
 
@@ -384,6 +386,7 @@ def test_setup_command_rolls_back_autostart_on_start_failure(monkeypatch, tmp_pa
     monkeypatch.setattr("mem.cli.install_launch_agent", fake_install_launch_agent)
     monkeypatch.setattr("mem.cli.start_hidden_mcp_server", fake_start_hidden_mcp_server)
     monkeypatch.setattr("mem.cli.remove_launch_agent", fake_remove_launch_agent)
+    monkeypatch.setattr("mem.cli.configure_logging", lambda: None)
     monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: tmp_path / "mcp-serve.stderr.log")
     monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: False)
     monkeypatch.setattr("mem.cli._tail_text", lambda path, max_lines=20: "")
