@@ -10,6 +10,13 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.10] — 2026-06-12
+
+### Fixed
+
+- Fixed Homebrew formula generation by escaping Ruby block braces inside the Python template.
+
+---
 ## [0.1.9] — 2026-06-12
 
 ### Changed

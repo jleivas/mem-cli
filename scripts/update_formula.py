@@ -55,7 +55,7 @@ class MemCli < Formula
       libexec.install Dir["*"]
       executable = libexec/"mem"
       unless executable.exist?
-        candidate = Dir[libexec/"**/mem"].find { |path| File.file?(path) }
+        candidate = Dir[libexec/"**/mem"].find {{ |path| File.file?(path) }}
         executable = Pathname(candidate) if candidate
       end
       odie "mem executable was not found in the release artifact" unless executable&.exist?
