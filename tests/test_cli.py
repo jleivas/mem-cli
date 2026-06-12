@@ -34,6 +34,17 @@ def test_version_command_does_not_configure_logging(monkeypatch) -> None:
     assert APP_VERSION in result.output
 
 
+def test_version_command_does_not_create_mem_home(monkeypatch, tmp_path) -> None:
+    mem_home = tmp_path / "mem-home"
+    monkeypatch.setenv("MEM_HOME", str(mem_home))
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["version"])
+    assert result.exit_code == 0
+    assert APP_VERSION in result.output
+    assert not mem_home.exists()
+
+
 def test_root_version_option() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--version"])
@@ -52,6 +63,17 @@ def test_root_version_option_does_not_configure_logging(monkeypatch) -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert APP_VERSION in result.output
+
+
+def test_root_version_option_does_not_create_mem_home(monkeypatch, tmp_path) -> None:
+    mem_home = tmp_path / "mem-home"
+    monkeypatch.setenv("MEM_HOME", str(mem_home))
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert APP_VERSION in result.output
+    assert not mem_home.exists()
 
 
 def test_help_lists_version_command() -> None:

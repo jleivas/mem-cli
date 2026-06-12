@@ -10,6 +10,13 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.11] — 2026-06-12
+
+### Fixed
+
+- Made `mem version` and `mem --version` skip runtime environment bootstrap so Homebrew sandbox checks can run without creating `MEM_HOME`.
+
+---
 ## [0.1.10] — 2026-06-12
 
 ### Fixed

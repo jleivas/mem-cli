@@ -138,12 +138,12 @@ def _bootstrap(
         is_eager=True,
     ),
 ) -> None:
-    _bootstrap_env()
     if version:
         console.print(_render_version_panel())
         raise typer.Exit()
     if ctx.invoked_subcommand == "version":
         return
+    _bootstrap_env()
     configure_logging()
     logger.debug("CLI bootstrap complete")
 
@@ -2160,8 +2160,8 @@ def help() -> None:  # noqa: A001
 
 def main() -> None:
     import sys
-    _bootstrap_env()
     if len(sys.argv) == 1:
+        _bootstrap_env()
         _run_menu()
     else:
         app()
