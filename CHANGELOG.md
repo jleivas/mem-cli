@@ -10,6 +10,22 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.16] — 2026-06-12
+
+### Added
+
+- `mem serve` now enters a persistent **daemon mode** when stdin is `/dev/null` (spawned by LaunchAgent or `start_hidden_mcp_server`): writes its PID to the MCP state file and stays alive instead of exiting on stdio EOF.
+
+### Fixed
+
+- `mem setup` no longer spawns a redundant background process on top of the LaunchAgent; it waits for the LaunchAgent-started daemon to register and shows a warning on timeout without rolling back the autostart configuration.
+
+### Changed
+
+- Removed `KeepAlive` from the macOS LaunchAgent plist — the daemon now stays running, so automatic restarts are unnecessary.
+- MCP client pipe connections (`stdin` is a real pipe, e.g. from Claude Code) bypass the "already running" guard and never overwrite daemon state in the MCP state file.
+
+---
 ## [0.1.15] — 2026-06-12
 
 ### Fixed

@@ -1981,6 +1981,8 @@ def serve(
         }
       }
     """
+    import os
+    import stat as _stat
     import sys
     logger.info(
         "serve invoked (autostart=%s, disable_autostart=%s, background=%s, new_terminal=%s)",
@@ -1990,6 +1992,17 @@ def serve(
         new_terminal,
     )
     logger.info("serve stdin.isatty()=%s", sys.stdin.isatty())
+
+    # Detect stdin type so we can route to the right execution mode later.
+    # MCP clients (e.g. Claude Code) connect via a real pipe; LaunchAgent / background
+    # spawns connect via /dev/null (character device).  TTY = interactive dashboard.
+    _stdin_is_pipe = False
+    if not sys.stdin.isatty():
+        try:
+            _stdin_is_pipe = _stat.S_ISFIFO(os.fstat(sys.stdin.fileno()).st_mode)
+        except Exception:
+            pass
+
     if ctx.invoked_subcommand is not None:
         selected_modes = [autostart, disable_autostart, background, new_terminal]
         if any(selected_modes):
@@ -2003,7 +2016,9 @@ def serve(
         raise typer.BadParameter(
             "Choose only one of --autostart, --disable-autostart, --background, or --new-terminal."
         )
-    if not (autostart or disable_autostart) and _mcp_server_is_running():
+    # MCP client pipe connections are always allowed regardless of whether a daemon
+    # is running — the client manages the session lifecycle, not the user.
+    if not _stdin_is_pipe and not (autostart or disable_autostart) and _mcp_server_is_running():
         console.print(Panel.fit(
             "MCP server is already running. Stop it with `mem serve stop` before starting a new one.",
             border_style=ACCENT_ORANGE,
@@ -2087,10 +2102,18 @@ def serve(
     if sys.stdin.isatty():
         logger.info("serve entering TTY dashboard path")
         _serve_tty()
-    else:
-        logger.info("serve entering stdio MCP path")
+    elif _stdin_is_pipe:
+        # Real MCP client connected via pipe (e.g. Claude Code).  Don't overwrite the
+        # daemon state if one is already running — the session is ephemeral.
+        logger.info("serve entering stdio MCP path (client pipe)")
         from .mcp.server import run as _run_mcp
-        _run_mcp()
+        _run_mcp(write_state=not _mcp_server_is_running())
+    else:
+        # stdin is /dev/null: started by LaunchAgent or _start_mcp_server_background.
+        # Run as a keep-alive daemon so the process stays alive and status is trackable.
+        logger.info("serve entering background daemon mode")
+        from .mcp.server import run_daemon as _run_daemon
+        _run_daemon()
 
 
 @serve_app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
@@ -2119,10 +2142,18 @@ def setup() -> None:
         raise typer.Exit(code=1)
 
     install_launch_agent()
-    _start_mcp_server_background(
-        failure_message="MCP setup enabled autostart, but the server failed to start.",
-        on_failure=remove_launch_agent,
-    )
+    # The LaunchAgent starts mem serve automatically (RunAtLoad=True).  Wait for the
+    # daemon to register in the state file before showing status.
+    if not _wait_for_mcp_server_running(timeout=15.0):
+        log_path = Path.home() / ".mem-cli" / "runtime" / "mcp.stderr.log"
+        console.print(Panel.fit(
+            Text.assemble(
+                ("MCP autostart configured, but the server did not respond within 15 s.\n", "white"),
+                ("Check the log: ", "dim"),
+                (str(log_path), f"bold {ACCENT_YELLOW}"),
+            ),
+            border_style=ACCENT_YELLOW,
+        ))
     result = _status_action()
     console.print(_render_action_screen(result))
 

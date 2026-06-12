@@ -210,11 +210,12 @@ def monitor_stop() -> dict[str, Any]:
     }
 
 
-def run() -> None:
+def run(*, write_state: bool = True) -> None:
     """Entry point: start the MCP server over stdio.
 
     Registers the process PID in the MCP state file so that `mem status`
-    and `mem serve stop` can inspect and terminate it.
+    and `mem serve stop` can inspect and terminate it.  Pass write_state=False
+    when a daemon is already tracking state to avoid overwriting it.
     """
     import os
 
@@ -230,18 +231,72 @@ def run() -> None:
         started_at=utc_now(),
         last_updated=utc_now(),
     )
-    try:
-        state_store.save(state)
-    except OSError:
-        logger.exception(
-            "mem MCP server could not write runtime state to %s; continuing without status tracking.",
-            state_store.path,
-        )
+    if write_state:
+        try:
+            state_store.save(state)
+        except OSError:
+            logger.exception(
+                "mem MCP server could not write runtime state to %s; continuing without status tracking.",
+                state_store.path,
+            )
     try:
         logger.info("mem MCP server ready")
         mcp.run()
     finally:
+        if write_state:
+            try:
+                state_store.clear()
+            except OSError:
+                logger.debug("Could not clear MCP runtime state", exc_info=True)
+
+
+def run_daemon() -> None:
+    """Keep-alive background daemon mode (LaunchAgent / start_hidden_mcp_server).
+
+    Runs when stdin is /dev/null (no MCP client present).  Writes the PID to
+    the MCP state file and loops until SIGTERM or KeyboardInterrupt so that
+    `mem status` shows the server as running and `mem serve stop` can stop it.
+    """
+    import os
+    import signal
+    import time
+
+    from ..config import get_mcp_state_path
+    from ..storage.runtime_state import RuntimeState, RuntimeStateStore
+    from ..utils.time import utc_now
+
+    configure_logging()
+    state_store = RuntimeStateStore(get_mcp_state_path())
+    started_at = utc_now()
+
+    _active = True
+
+    def _stop(signum: int, frame: object) -> None:
+        nonlocal _active
+        _active = False
+
+    signal.signal(signal.SIGTERM, _stop)
+
+    try:
+        state_store.save(RuntimeState(
+            running=True,
+            pid=os.getpid(),
+            started_at=started_at,
+            last_updated=started_at,
+        ))
+        logger.info("mem MCP daemon ready")
+        while _active:
+            time.sleep(5)
+            state_store.save(RuntimeState(
+                running=True,
+                pid=os.getpid(),
+                started_at=started_at,
+                last_updated=utc_now(),
+            ))
+    except KeyboardInterrupt:
+        pass
+    finally:
         try:
             state_store.clear()
         except OSError:
-            logger.debug("Could not clear MCP runtime state", exc_info=True)
+            pass

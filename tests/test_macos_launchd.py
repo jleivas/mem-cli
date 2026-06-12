@@ -13,7 +13,7 @@ def test_launch_agent_payload_targets_mem_serve() -> None:
     assert payload["Label"] == macos_launchd.LAUNCH_AGENT_LABEL
     assert payload["ProgramArguments"] == ["/opt/homebrew/bin/mem", "serve"]
     assert payload["RunAtLoad"] is True
-    assert payload["KeepAlive"] is True
+    assert "KeepAlive" not in payload
 
 
 def test_install_launch_agent_writes_plist_and_bootstraps(tmp_path: Path, monkeypatch) -> None:

@@ -410,41 +410,24 @@ def test_setup_command_invokes_installer(monkeypatch) -> None:
     assert "MCP setup complete" in result.output
 
 
-def test_setup_command_rolls_back_autostart_on_start_failure(monkeypatch, tmp_path) -> None:
-    called = {"install": False, "remove": False, "start": False}
+def test_setup_command_shows_warning_on_start_timeout(monkeypatch, tmp_path) -> None:
+    # When the daemon doesn't register within the timeout, setup shows a warning
+    # but keeps the autostart configured (no rollback) and exits cleanly.
+    called = {"install": False}
 
     def fake_install_launch_agent():
         called["install"] = True
         return "/tmp/com.mem.cli.mcp.plist"
 
-    class FakeProcess:
-        def poll(self):
-            return None
-
-    def fake_start_hidden_mcp_server(program=None, platform_name=None, stderr_log_path=None):
-        called["start"] = True
-        return FakeProcess()
-
-    def fake_remove_launch_agent():
-        called["remove"] = True
-        return True
-
     monkeypatch.setattr("mem.cli.install_launch_agent", fake_install_launch_agent)
-    monkeypatch.setattr("mem.cli.start_hidden_mcp_server", fake_start_hidden_mcp_server)
-    monkeypatch.setattr("mem.cli.remove_launch_agent", fake_remove_launch_agent)
-    monkeypatch.setattr("mem.cli.configure_logging", lambda: None)
-    monkeypatch.setattr("mem.cli._mcp_serve_log_path", lambda: tmp_path / "mcp-serve.stderr.log")
-    monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=10.0, interval=0.2: False)
-    monkeypatch.setattr("mem.cli._tail_text", lambda path, max_lines=20: "")
+    monkeypatch.setattr("mem.cli._wait_for_mcp_server_running", lambda timeout=15.0, interval=0.2: False)
 
     runner = CliRunner()
     result = runner.invoke(app, ["setup"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     assert called["install"] is True
-    assert called["start"] is True
-    assert called["remove"] is True
-    assert "No error trace was captured." in result.output
+    assert "did not respond within" in result.output
 
 
 def test_start_and_stop_commands(monkeypatch) -> None:

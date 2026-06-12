@@ -219,7 +219,6 @@ def build_autostart_payload(program: str, platform_name: str | None = None) -> s
             "Label": LAUNCH_AGENT_LABEL,
             "ProgramArguments": [program, "serve"],
             "RunAtLoad": True,
-            "KeepAlive": True,
             "StandardOutPath": str(Path.home() / ".mem-cli" / "runtime" / "mcp.stdout.log"),
             "StandardErrorPath": str(Path.home() / ".mem-cli" / "runtime" / "mcp.stderr.log"),
         }
