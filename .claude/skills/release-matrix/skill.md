@@ -23,8 +23,10 @@ This binary set covers all supported platforms:
 | Platform | Binary used | How |
 |---|---|---|
 | macOS Apple Silicon (M1/M2/M3/M4) | `mem-darwin-arm64` | Native |
-| macOS Intel | `mem-darwin-arm64` | Rosetta 2 (transparent, no user action needed) |
+| macOS Intel | `mem-darwin-amd64` | Native x86_64 (built on ARM runner via Rosetta 2) |
 | Linux x86_64 | `mem-linux-amd64` | Native |
+
+> **IMPORTANTE:** Rosetta 2 solo va en una dirección — permite a Macs ARM correr binarios x86_64, NO al revés. Un Mac Intel NO puede ejecutar el binario ARM64 (`bad CPU type in executable`). Se requieren binarios separados para cada arquitectura.
 
 ## Banned runners
 

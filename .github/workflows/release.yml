@@ -16,6 +16,8 @@ jobs:
         include:
           - os: macos-latest
             asset: mem-darwin-arm64
+          - os: macos-latest
+            asset: mem-darwin-amd64
           - os: ubuntu-latest
             asset: mem-linux-amd64
 
@@ -26,20 +28,55 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      # Intel binary: install universal2 Python from python.org and use it
+      # via `arch -x86_64` so pip fetches x86_64 wheels and PyInstaller
+      # produces an x86_64 binary — all running under Rosetta 2 on the ARM runner.
+      - name: Install x86_64 Python (Intel binary only)
+        if: matrix.asset == 'mem-darwin-amd64'
+        run: |
+          softwareupdate --install-rosetta --agree-to-license 2>/dev/null || true
+          curl -fsSL -o /tmp/py311.pkg \
+            https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg
+          sudo installer -pkg /tmp/py311.pkg -target /
+          arch -x86_64 /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11 \
+            --version
+
+      - name: Install dependencies (ARM)
+        if: matrix.asset != 'mem-darwin-amd64'
         run: |
           pip install --upgrade pip
           pip install -e ".[release]"
           pip install -e "."
 
-      - name: Build binary
+      - name: Install dependencies (Intel x86_64 via Rosetta)
+        if: matrix.asset == 'mem-darwin-amd64'
+        run: |
+          X86_PY="arch -x86_64 /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11"
+          $X86_PY -m pip install --upgrade pip
+          $X86_PY -m pip install -e ".[release]"
+          $X86_PY -m pip install -e "."
+
+      - name: Build binary (ARM)
+        if: matrix.asset != 'mem-darwin-amd64'
         run: python scripts/build_binary.py
+
+      - name: Build binary (Intel x86_64 via Rosetta)
+        if: matrix.asset == 'mem-darwin-amd64'
+        run: |
+          arch -x86_64 \
+            /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11 \
+            scripts/build_binary.py
 
       - name: Package binary
         run: tar -czf ${{ matrix.asset }}.tar.gz -C dist/mem .
 
-      - name: Smoke test
+      - name: Smoke test (ARM)
+        if: matrix.asset != 'mem-darwin-amd64'
         run: dist/mem/mem --version
+
+      - name: Smoke test (Intel x86_64 via Rosetta)
+        if: matrix.asset == 'mem-darwin-amd64'
+        run: arch -x86_64 dist/mem/mem --version
 
       - uses: actions/upload-artifact@v4
         with:

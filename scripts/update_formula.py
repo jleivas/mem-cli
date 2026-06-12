@@ -23,9 +23,14 @@ class MemCli < Formula
   license "MIT"
 
   on_macos do
-    # ARM64 binary runs on both Apple Silicon and Intel via Rosetta 2
-    url "{base_url}/mem-darwin-arm64.tar.gz"
-    sha256 "{darwin_arm64}"
+    on_arm do
+      url "{base_url}/mem-darwin-arm64.tar.gz"
+      sha256 "{darwin_arm64}"
+    end
+    on_intel do
+      url "{base_url}/mem-darwin-amd64.tar.gz"
+      sha256 "{darwin_amd64}"
+    end
   end
 
   on_linux do
@@ -64,6 +69,7 @@ def main() -> None:
         version=version,
         base_url=base_url,
         darwin_arm64=sha256(artifacts / "mem-darwin-arm64.tar.gz"),
+        darwin_amd64=sha256(artifacts / "mem-darwin-amd64.tar.gz"),
         linux_amd64=sha256(artifacts / "mem-linux-amd64.tar.gz"),
     ), end="")
 

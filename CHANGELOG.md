@@ -10,6 +10,13 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.14] — 2026-06-12
+
+### Fixed
+
+- Build Intel Mac (x86_64) binary on the ARM runner via Rosetta 2 using python.org universal2 Python, eliminating the `bad CPU type in executable` error on Intel Macs.
+
+---
 ## [0.1.13] — 2026-06-12
 
 ### Fixed
