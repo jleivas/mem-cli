@@ -10,6 +10,13 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.15] — 2026-06-12
+
+### Fixed
+
+- Fixed `mem setup` on Homebrew-installed binaries: when running as a PyInstaller frozen binary (`sys.frozen=True`), `sys.executable` points to the `mem` binary itself and does not accept `-c`. The Python supervisor is now skipped and stderr is redirected directly to the log file instead.
+
+---
 ## [0.1.14] — 2026-06-12
 
 ### Fixed

@@ -82,6 +82,31 @@ def start_hidden_mcp_server(
     resolved_program = _resolve_mem_command(program)
     platform = _platform(platform_name)
     log_path = stderr_log_path or Path.home() / ".mem-cli" / "runtime" / "mcp-serve.stderr.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # PyInstaller sets sys.frozen=True and makes sys.executable point to the binary
+    # itself, not a Python interpreter. The supervisor approach (sys.executable -c ...)
+    # would fail with "No such option: -c". Skip the supervisor and redirect stderr
+    # directly to the log file — the fd is inherited by the child after we close it.
+    if getattr(sys, "frozen", False):
+        kwargs: dict[str, object] = {
+            "stdin": subprocess.DEVNULL,
+            "stdout": subprocess.DEVNULL,
+        }
+        if platform == "win32":
+            creation_flags = 0
+            creation_flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+            creation_flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            kwargs["creationflags"] = creation_flags
+        else:
+            kwargs["start_new_session"] = True
+        log_handle = log_path.open("a", encoding="utf-8")
+        try:
+            kwargs["stderr"] = log_handle
+            return subprocess.Popen([resolved_program, "serve"], **kwargs)  # type: ignore[arg-type]
+        finally:
+            log_handle.close()
+
     supervisor_code = (
         "from pathlib import Path\n"
         "import subprocess\n"
