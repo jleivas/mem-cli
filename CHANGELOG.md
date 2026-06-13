@@ -10,6 +10,18 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ---
+## [0.1.17] — 2026-06-13
+
+### Added
+
+- New `mem uninstall` command that stops the MCP server, removes the macOS LaunchAgent (Login Item), and runs `brew uninstall mem-cli` automatically in one step.
+
+### Changed
+
+- Docs site: added an **Uninstall** section under Getting started with a step-by-step breakdown of what `mem uninstall` does.
+- Docs site: improved the agent configuration prompt to instruct agents to read `mem recall` at the start of every session for cross-agent consistency, and to save a summary or ask the developer after significant code changes.
+
+---
 ## [0.1.16] — 2026-06-12
 
 ### Added

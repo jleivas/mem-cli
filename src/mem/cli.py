@@ -2159,6 +2159,55 @@ def setup() -> None:
 
 
 @app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
+def uninstall() -> None:
+    """Stop the MCP server, remove autostart, and uninstall via Homebrew."""
+    import subprocess
+
+    rows: list[tuple[str, str, str]] = []
+
+    mcp_result = _mcp_stop_action()
+    if mcp_result.border_style == ACCENT_CORAL:
+        rows.append(("MCP server", "stopped", ACCENT_CORAL))
+    else:
+        rows.append(("MCP server", "not running", "dim"))
+
+    removed = remove_launch_agent()
+    rows.append((
+        "MCP autostart",
+        "removed" if removed else "not installed",
+        ACCENT_CORAL if removed else "dim",
+    ))
+
+    brew = shutil.which("brew")
+    if brew:
+        result = subprocess.run(
+            [brew, "uninstall", "mem-cli"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            rows.append(("Homebrew", "uninstalled", ACCENT_CORAL))
+        else:
+            err = (result.stderr or result.stdout).strip().splitlines()
+            short = err[0] if err else "brew uninstall failed"
+            rows.append(("Homebrew", short, "red"))
+    else:
+        rows.append(("Homebrew", "not found — remove manually", "dim"))
+
+    table = Table.grid(padding=(0, 2))
+    table.add_column(style=f"bold {ACCENT_ORANGE}")
+    table.add_column()
+    for label, state, style in rows:
+        table.add_row(label, Text(state, style=style))
+
+    console.print(_render_action_screen(_ActionResult(
+        title="Uninstall",
+        body=table,
+        border_style=ACCENT_CORAL,
+    )))
+
+
+@app.command(rich_help_panel=f"[bold {ACCENT_ORANGE}]Memory[/]")
 def adapters() -> None:
     """List available token source adapters and discovered plugins."""
     table = Table(expand=True, box=ROUNDED, border_style=ACCENT_PINK)
